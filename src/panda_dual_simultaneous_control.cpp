@@ -8,13 +8,14 @@
 #include <moveit_msgs/CollisionObject.h>
 
 #include <moveit_visual_tools/moveit_visual_tools.h>
-#include "panda_dual_control.h"
+#include "panda_dual_simultaneous_control.h"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <math.h>
 #include <cmath>
 
 #include <tf2_ros/transform_listener.h>
 #include <string>
+#include <vector>
 // #include "LinearMath/btMatrix3x3.h"
 
 #define _USE_MATH_DEFINES
@@ -111,26 +112,56 @@ int main(int argc, char *argv[])
 
     // Read param data
     std::string arm_id;
-    node_handle.param<std::string>("arm_id", arm_id, "panda2");
-
-    std::string controller_id;
-    node_handle.param<std::string>("controller_id", controller_id, "left");
+    node_handle.param<std::string>("arm_id", arm_id, "dual");
 
     // Setup MoveIt!
     static const std::string PLANNING_GROUP = arm_id;
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
+    // move_group.setEndEffectorLink("panda_1_link8");
+
+    robotHandler.left.endLinkName = "panda_1_link8";
+    robotHandler.right.endLinkName = "panda_2_link8";
 
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
     const robot_state::JointModelGroup* joint_model_group = move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
 
+    std::vector<geometry_msgs::Pose> waypoints;
+    std::vector<geometry_msgs::Pose> waypoints2;
+    geometry_msgs::Pose target_pose1;
+    geometry_msgs::Pose target_pose2;
+    target_pose1 = move_group.getCurrentPose("panda_1_link8").pose;
+    target_pose2 = move_group.getCurrentPose("panda_2_link8").pose;
+    // target_pose1.position.x = 0.5;
+    // target_pose1.position.y = 0.0;
+    target_pose1.position.z += 0.2;
+    target_pose2.position.z += 0.3;
+    // move_group.setPoseTarget(target_pose1, "panda_1_link8");
+    // move_group.setPoseTarget(target_pose2, "panda_2_link8");
+
+    moveit_msgs::RobotTrajectory trajectory;
+    const double jump_threshold = 0.5; 
+    const double eef_step = 0.01;
+    move_group.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory, "panda_1_link8");
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    my_plan.trajectory_ = trajectory;
+    move_group.execute(my_plan);
+
+    move_group.computeCartesianPath(waypoints2, eef_step, jump_threshold, trajectory, "panda_2_link8");
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
+    my_plan.trajectory_ = trajectory;
+    move_group.execute(my_plan2);
+
+
+    move_group.asyncMove();
+    
     // Setup ROS subscribers and publishers
-    ros::Subscriber sub_processed = node_handle.subscribe("/vive/controller/" + controller_id + "/processed/pose", 1, controllerCallbackProcessed);
-    ros::Subscriber sub = node_handle.subscribe("/vive/controller/" + controller_id + "/pose", 1, controllerCallback);
-    // ros::Subscriber sub_trigger = node_handle.subscribe("/vive/controller/" + controller_id + "/trigger", 1, triggerCallback);
-    ros::Subscriber sub_menu = node_handle.subscribe("/vive/controller/" + controller_id + "/buttons/menu", 1, menuCallback);
-    pub = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/" + controller_id + "/processed/pose", 1);
+    ros::Subscriber sub_processed = node_handle.subscribe("/vive/controller/left/processed/pose", 1, controllerCallbackProcessed);
+    ros::Subscriber sub = node_handle.subscribe("/vive/controller/left/pose", 1, controllerCallback);
+    // ros::Subscriber sub_trigger = node_handle.subscribe("/vive/controller/left/trigger", 1, triggerCallback);
+    ros::Subscriber sub_menu = node_handle.subscribe("/vive/controller/left/buttons/menu", 1, menuCallback);
+    pub = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/left/processed/pose", 1);
 
     //Start running loop
     ros::Rate loop_rate(100);
