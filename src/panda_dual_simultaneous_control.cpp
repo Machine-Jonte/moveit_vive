@@ -16,6 +16,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <string>
 #include <vector>
+#include <time.h>
 // #include "LinearMath/btMatrix3x3.h"
 
 #define _USE_MATH_DEFINES
@@ -23,11 +24,12 @@
 
 
 RobotHandler robotHandler;
-CallibrationManager callibrationManager;
-ros::Publisher pub;
-geometry_msgs::Pose currentPose;
+ros::Publisher pub_left;
+ros::Publisher pub_right;
+// geometry_msgs::Pose currentPose;
 
 tf2_ros::Buffer tfBuffer;
+// clock_t action_clock;
 
 
 double deg2rad (double degrees) {
@@ -118,53 +120,74 @@ int main(int argc, char *argv[])
     static const std::string PLANNING_GROUP = arm_id;
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     // move_group.setEndEffectorLink("panda_1_link8");
+    // move_group.setEndEffectorLink("panda_2_link8");
 
-    robotHandler.left.endLinkName = "panda_1_link8";
-    robotHandler.right.endLinkName = "panda_2_link8";
+    robotHandler.right.endLinkName = "panda_1_link8";
+    robotHandler.left.endLinkName = "panda_2_link8";
 
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
     const robot_state::JointModelGroup* joint_model_group = move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
 
-    std::vector<geometry_msgs::Pose> waypoints;
-    std::vector<geometry_msgs::Pose> waypoints2;
-    geometry_msgs::Pose target_pose1;
-    geometry_msgs::Pose target_pose2;
-    target_pose1 = move_group.getCurrentPose("panda_1_link8").pose;
-    target_pose2 = move_group.getCurrentPose("panda_2_link8").pose;
+    // ----- SIMPLE TEST TO SEE THAT IT WORKS -----
+    // std::vector<geometry_msgs::Pose> waypoints;
+    // std::vector<geometry_msgs::Pose> waypoints2;
+    geometry_msgs::Pose target_pose_left;
+    geometry_msgs::Pose target_pose_right;
+    target_pose_left = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName).pose;
+    target_pose_right = move_group.getCurrentPose(robotHandler.right.endLinkName).pose;
+    printf("Current Pose: x: %f, y: %f, z: %f \n", target_pose_left.position.x, target_pose_left.position.y, target_pose_left.position.z);
+    robotHandler.left.waypoints.push_back(move_group.getCurrentPose(robotHandler.left.endLinkName).pose);
+    robotHandler.right.waypoints.push_back(move_group.getCurrentPose(robotHandler.right.endLinkName).pose);
     // target_pose1.position.x = 0.5;
     // target_pose1.position.y = 0.0;
-    target_pose1.position.z += 0.2;
-    target_pose2.position.z += 0.3;
-    // move_group.setPoseTarget(target_pose1, "panda_1_link8");
-    // move_group.setPoseTarget(target_pose2, "panda_2_link8");
+    target_pose_left.position.z += 0.2;
+    target_pose_right.position.z += 0.3;
 
-    moveit_msgs::RobotTrajectory trajectory;
-    const double jump_threshold = 0.5; 
-    const double eef_step = 0.01;
-    move_group.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory, "panda_1_link8");
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    my_plan.trajectory_ = trajectory;
-    move_group.execute(my_plan);
+    // move_group.setPoseTarget(target_pose_left, robotHandler.left.endLinkName);
+    // move_group.setPoseTarget(target_pose_right, robotHandler.right.endLinkName);
 
-    move_group.computeCartesianPath(waypoints2, eef_step, jump_threshold, trajectory, "panda_2_link8");
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
-    my_plan.trajectory_ = trajectory;
-    move_group.execute(my_plan2);
+    // waypoints2.clear();
+    // robotHandler.left.waypoints.push_back(target_pose_left);
+    // robotHandler.right.waypoints.push_back(target_pose_right);
+
+    // moveit_msgs::RobotTrajectory trajectory;
+    // const double jump_threshold = 0.5; 
+    // const double eef_step = 0.01;
+    // move_group.computeCartesianPath(robotHandler.left.waypoints, eef_step, jump_threshold, trajectory, "panda_2_link8");
+    // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    // my_plan.trajectory_ = trajectory;
+    // move_group.execute(my_plan);
+
+    // move_group.computeCartesianPath(robotHandler.right.waypoints, eef_step, jump_threshold, trajectory, "panda_2_link8");
+    // moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
+    // my_plan.trajectory_ = trajectory;
+    // move_group.execute(my_plan2);
 
 
-    move_group.asyncMove();
+    // move_group.asyncMove();
+    // ----- END SIMPLE TEST -----
     
     // Setup ROS subscribers and publishers
-    ros::Subscriber sub_processed = node_handle.subscribe("/vive/controller/left/processed/pose", 1, controllerCallbackProcessed);
-    ros::Subscriber sub = node_handle.subscribe("/vive/controller/left/pose", 1, controllerCallback);
-    // ros::Subscriber sub_trigger = node_handle.subscribe("/vive/controller/left/trigger", 1, triggerCallback);
-    ros::Subscriber sub_menu = node_handle.subscribe("/vive/controller/left/buttons/menu", 1, menuCallback);
-    pub = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/left/processed/pose", 1);
+    // LEFT
+    // ros::Subscriber sub_processed_left = node_handle.subscribe("/vive/controller/left/processed/pose", 1, controllerCallbackProcessed);
+    ros::Subscriber sub_pose_left = node_handle.subscribe("/vive/controller/left/pose", 1, leftControllerCallback);
+    ros::Subscriber sub_trigger_left = node_handle.subscribe("/vive/controller/left/trigger", 1, leftTriggerCallback);
+    ros::Subscriber sub_menu_left = node_handle.subscribe("/vive/controller/left/buttons/menu", 1, leftMenuCallback);
+    ros::Subscriber sub_grip_left = node_handle.subscribe("/vive/controller/left/buttons/grip", 1, leftGripCallback);
+    pub_left = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/left/processed/pose", 1);
+
+    // RIGHT
+    // ros::Subscriber sub_processed_right = node_handle.subscribe("/vive/controller/right/processed/pose", 1, controllerCallbackProcessed);
+    ros::Subscriber sub_pose_right = node_handle.subscribe("/vive/controller/right/pose", 1, rightControllerCallback);
+    ros::Subscriber sub_trigger_right = node_handle.subscribe("/vive/controller/right/trigger", 1, rightTriggerCallback);
+    ros::Subscriber sub_menu_right = node_handle.subscribe("/vive/controller/right/buttons/menu", 1, rightMenuCallback);
+    ros::Subscriber sub_grip_right = node_handle.subscribe("/vive/controller/right/buttons/grip", 1, rightGripCallback);
+    pub_right = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/right/processed/pose", 1);
 
     //Start running loop
-    ros::Rate loop_rate(100);
+    ros::Rate loop_rate(1);
     while (ros::ok()) {
         ros::AsyncSpinner spinner(1); 
         spinner.start();
@@ -176,58 +199,170 @@ int main(int argc, char *argv[])
 }
 
 // Read the processed pose and IF button is pressed move
-void controllerCallbackProcessed(const geometry_msgs::PoseStamped::ConstPtr& msg)
+
+// Set target pose and move robot
+void moveRobot()
 {
-    if(callibrationManager.setStartPose)
+    // if(robotHandler.left.menu)
+    // {
+    //     // robotHandler.left.PlanAndExecuteTrajectory(robotHandler.move_group_p);
+    //     // robotHandler.right.PlanAndExecuteTrajectory(robotHandler.move_group_p);
+        // robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
+    // }
+    // if(robotHandler.right.menu)
+    // {
+    //     // robotHandler.left.PlanAndExecuteTrajectory(robotHandler.move_group_p);
+    //     robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
+    // }
+
+    // if(robotHandler.left.menu || robotHandler.right.menu){
+    //     robotHandler.move_group_p->asyncMove();
+    // }
+    robotHandler.move_group_p->asyncMove();
+
+}
+
+void ControlProcessPose(RobotArm &robotArm)
+{
+    if(!robotArm.menu)
     {
-        robotHandler.move_group_p->setPoseTarget(msg->pose);
-        robotHandler.move_group_p->asyncMove();
+        robotArm.VR_startingPose = robotArm.VR_rawPose.pose;
+    }
+    geometry_msgs::PoseStamped poseStamped = copyPose(robotArm.VR_rawPose);
+    SubtractPose(poseStamped.pose, robotArm.VR_startingPose);
+    AddPose(poseStamped.pose, robotArm.currentPoseRobot);
+    robotArm.targetPose = poseStamped;
+}
+
+void DualControlProcessPose(){
+    if(!robotHandler.busy)
+    {
+        robotHandler.busy = true;
+
+        robotHandler.left.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName).pose;
+        robotHandler.right.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.right.endLinkName).pose;
+        ControlProcessPose(robotHandler.left);
+        ControlProcessPose(robotHandler.right);
+            
+        pub_left.publish(robotHandler.left.targetPose);
+        pub_right.publish(robotHandler.right.targetPose);
+
+        // moveRobot();
+
+        robotHandler.busy = false;
     }
 }
 
+
+// geometry_msgs::Pose ControllerProcessPose(geometry_msgs::Pose pose, RobotArm *robotArm)
+// {
+//     if(!(robotArm->menu == 1)){
+//         printf("Got here\n");
+//         robotArm->VR_startingPose = pose;
+//         try{
+//             printf("Got here too!\n");
+//             std::cout << robotArm->endLinkName << std::endl;
+//             robotArm->currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotArm->endLinkName).pose;
+//             // printf("Current Pose: x: %f, y: %f, z: %f \n", currentPose.position.x, currentPose.position.y, currentPose.position.z);
+//         }
+//         catch (int e) {
+//             printf("Couldn't get current pose\n");
+//         }
+//     }
+//     SubtractPose(pose, robotArm->VR_startingPose);
+//     AddPose(pose, robotArm->currentPoseRobot);
+//     robotArm->targetPose = pose;
+
+//     return pose;
+// }
 // Process the pose from the VR to match robot (without this the pose would not be centered around the end effector)
-void controllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
+// It would be prefferable to combine both of the callbacks as they are redicously similar.
+void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-    geometry_msgs::PoseStamped cmsg = copyPose(*msg);
-
-    if(!callibrationManager.setStartPose){
-        callibrationManager.startingPose = cmsg.pose;
-        try{
-            currentPose = robotHandler.move_group_p->getCurrentPose().pose;
-        }
-        catch (int e) {
-            printf("Couldn't get current pose");
-        }
-    }
-    SubtractPose(cmsg.pose, callibrationManager.startingPose);
-    AddPose(cmsg.pose, currentPose);
-
-    pub.publish(cmsg);
+    // It's only possible to run getCurrentPose() one time at the time
+    // if(!robotHandler.busy)
+    // {
+    //     robotHandler.busy = true;
+    //     geometry_msgs::PoseStamped cmsg = copyPose(*msg);
+    //     cmsg.pose = ControllerProcessPose(cmsg.pose, &robotHandler.right);
+    //     pub_right.publish(cmsg);
+    //     robotHandler.busy = false;
+    // }
+    robotHandler.right.VR_rawPose = *msg;
+    DualControlProcessPose();
+    // pub_right.publish(robotHandler.right.targetPose);
 }
+
+void leftControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
+{
+    // It's only possible to run getCurrentPose() one time at the time
+    // if(!robotHandler.busy)
+    // {
+    //     robotHandler.busy = true;
+    //     geometry_msgs::PoseStamped cmsg = copyPose(*msg);
+    //     cmsg.pose = ControllerProcessPose(cmsg.pose, &robotHandler.left);
+    //     pub_left.publish(cmsg);
+    //     robotHandler.busy = false;
+    // }
+    robotHandler.left.VR_rawPose = *msg;
+    DualControlProcessPose();
+    // pub_left.publish(robotHandler.left.targetPose);
+}
+
 
 // Move the grippers (Open/Close)
-// void triggerCallback(const std_msgs::Float32::ConstPtr& msg)
-// {
-//     std::vector<double> joints;
-//     joints = robotHandler.move_group_p->getCurrentJointValues();
-//     printf("Joint Value %f", joints.at(0));
-//     joints.at(0) = msg->data;
+void rightTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
+{
+    robotHandler.right.trigger = msg->data;
+    if((int) msg->data == 1)
+    {
+        robotHandler.right.finalTargetPose = robotHandler.right.targetPose;
+        robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
+        
+    }
+}
 
-//     robotHandler.move_group_p->setJointValueTarget(joints);
-//     robotHandler.move_group_p->move();
-// }
+void leftTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
+{
+    robotHandler.left.trigger = msg->data;
+    if((int) msg->data == 1)
+    {
+        robotHandler.left.finalTargetPose = robotHandler.left.targetPose;
+        robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
+    }
+
+}
 
 // If pressed => move robot 
-void menuCallback(const std_msgs::Int32::ConstPtr& msg)
+void rightMenuCallback(const std_msgs::Int32::ConstPtr& msg)
 {
-    callibrationManager.setStartPose = (msg->data == 1);
+    robotHandler.right.menu = msg->data;
 }
+void leftMenuCallback(const std_msgs::Int32::ConstPtr& msg)
+{
+    robotHandler.left.menu = msg->data;
+}
+
+void rightGripCallback(const std_msgs::Int32::ConstPtr& msg)
+{
+    robotHandler.left.grip = msg->data;
+    if(msg->data == 1)
+    {
+        moveRobot();
+    }
+}
+
+void leftGripCallback(const std_msgs::Int32::ConstPtr& msg)
+{
+    robotHandler.left.grip = msg->data;
+    if(msg->data == 1)
+    {
+        moveRobot();
+    }
+}
+
 
 // Help functions
-void CallibrationManager::SetStartPose(geometry_msgs::Pose msg){
-    this->startingPose = msg;
-}
-
 void SubtractPose(geometry_msgs::Pose &pose, geometry_msgs::Pose startingPose)
 {
     pose.position.x -= startingPose.position.x;
@@ -241,3 +376,22 @@ void AddPose(geometry_msgs::Pose &pose, geometry_msgs::Pose originPose)
     pose.position.y += originPose.position.y;
     pose.position.z += originPose.position.z;
 }
+
+
+
+// void RobotArm::PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p){
+//     this->waypoints.clear();
+//     this->waypoints.push_back(this->targetPose);
+
+//     char charEndLinkName[this->endLinkName.length() + 1]; 
+//     strcpy(charEndLinkName, this->endLinkName.c_str()); 
+
+//     move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
+//     this->my_plan.trajectory_ = this->trajectory;
+//     move_group_p->execute(this->my_plan);
+// }
+
+// RobotHandler::RobotHandler(){
+//     left.parentRobotHandler = this;
+//     right.parentRobotHandler = this;
+// };
