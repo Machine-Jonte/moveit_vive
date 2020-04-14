@@ -84,7 +84,7 @@ class RobotArm {
         // https://answers.ros.org/question/335836/moveit-moveit_ros_move_groupmove_group-nodes-in-a-namespace/
         trajectory_msgs::JointTrajectory PlanJointTrajectory()
         {
-            this->waypoints.push_back(this->targetPose.pose);
+            // this->waypoints.push_back(this->targetPose.pose);
 
             char charEndLinkName[this->endLinkName.length() + 1]; 
             strcpy(charEndLinkName, this->endLinkName.c_str()); 

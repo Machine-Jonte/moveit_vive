@@ -123,8 +123,6 @@ int main(int argc, char *argv[])
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     moveit::planning_interface::MoveGroupInterface move_group_right("panda1");
     moveit::planning_interface::MoveGroupInterface move_group_left("panda2");
-    // move_group.setEndEffectorLink("panda_1_link8");
-    // move_group.setEndEffectorLink("panda_2_link8");
 
     robotHandler.right.endLinkName = "panda_1_link8";
     robotHandler.left.endLinkName = "panda_2_link8";
@@ -133,9 +131,10 @@ int main(int argc, char *argv[])
 
     const robot_state::JointModelGroup* joint_model_group = move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
-
+    robotHandler.right.move_group_p = &move_group_right;
+    robotHandler.left.move_group_p = &move_group_left;
     
-    // Setup ROS subscribers and publishers
+    // -- Setup ROS subscribers and publishers --
     // LEFT
     // ros::Subscriber sub_processed_left = node_handle.subscribe("/vive/controller/left/processed/pose", 1, controllerCallbackProcessed);
     ros::Subscriber sub_pose_left = node_handle.subscribe("/vive/controller/left/pose", 1, leftControllerCallback);
@@ -154,6 +153,7 @@ int main(int argc, char *argv[])
     ros::Subscriber sub_grip_right = node_handle.subscribe("/vive/controller/right/buttons/grip", 1, rightGripCallback);
     pub_right = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/right/processed/pose", 1);
     pub_right_controller = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_1_arm_controller/command", 10);
+    // -- --
 
     //Start running loop
     ros::Rate loop_rate(1);
@@ -167,28 +167,11 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-// Read the processed pose and IF button is pressed move
 
-// Set target pose and move robot
+// Move robot
 void moveRobot()
 {
-    // if(robotHandler.left.menu)
-    // {
-    //     // robotHandler.left.PlanAndExecuteTrajectory(robotHandler.move_group_p);
-    //     // robotHandler.right.PlanAndExecuteTrajectory(robotHandler.move_group_p);
-        // robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
-    // }
-    // if(robotHandler.right.menu)
-    // {
-    //     // robotHandler.left.PlanAndExecuteTrajectory(robotHandler.move_group_p);
-    //     robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
-    // }
-
-    // if(robotHandler.left.menu || robotHandler.right.menu){
-    //     robotHandler.move_group_p->asyncMove();
-    // }
     robotHandler.move_group_p->asyncMove();
-
 }
 
 void ControlProcessPose(RobotArm &robotArm)
@@ -222,71 +205,35 @@ void DualControlProcessPose(){
     }
 }
 
-
-// geometry_msgs::Pose ControllerProcessPose(geometry_msgs::Pose pose, RobotArm *robotArm)
-// {
-//     if(!(robotArm->menu == 1)){
-//         printf("Got here\n");
-//         robotArm->VR_startingPose = pose;
-//         try{
-//             printf("Got here too!\n");
-//             std::cout << robotArm->endLinkName << std::endl;
-//             robotArm->currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotArm->endLinkName).pose;
-//             // printf("Current Pose: x: %f, y: %f, z: %f \n", currentPose.position.x, currentPose.position.y, currentPose.position.z);
-//         }
-//         catch (int e) {
-//             printf("Couldn't get current pose\n");
-//         }
-//     }
-//     SubtractPose(pose, robotArm->VR_startingPose);
-//     AddPose(pose, robotArm->currentPoseRobot);
-//     robotArm->targetPose = pose;
-
-//     return pose;
-// }
 // Process the pose from the VR to match robot (without this the pose would not be centered around the end effector)
 // It would be prefferable to combine both of the callbacks as they are redicously similar.
 void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-    // It's only possible to run getCurrentPose() one time at the time
-    // if(!robotHandler.busy)
-    // {
-    //     robotHandler.busy = true;
-    //     geometry_msgs::PoseStamped cmsg = copyPose(*msg);
-    //     cmsg.pose = ControllerProcessPose(cmsg.pose, &robotHandler.right);
-    //     pub_right.publish(cmsg);
-    //     robotHandler.busy = false;
-    // }
     robotHandler.right.VR_rawPose = *msg;
     DualControlProcessPose();
-    // pub_right.publish(robotHandler.right.targetPose);
 }
 
 void leftControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-    // It's only possible to run getCurrentPose() one time at the time
-    // if(!robotHandler.busy)
-    // {
-    //     robotHandler.busy = true;
-    //     geometry_msgs::PoseStamped cmsg = copyPose(*msg);
-    //     cmsg.pose = ControllerProcessPose(cmsg.pose, &robotHandler.left);
-    //     pub_left.publish(cmsg);
-    //     robotHandler.busy = false;
-    // }
     robotHandler.left.VR_rawPose = *msg;
     DualControlProcessPose();
-    // pub_left.publish(robotHandler.left.targetPose);
 }
 
 
-// Move the grippers (Open/Close)
+// Add controller pose to waypoints
 void rightTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
 {
     robotHandler.right.trigger = msg->data;
     if((int) msg->data == 1)
     {
+        if(robotHandler.right.waypoints.empty())
+        {
+            robotHandler.right.waypoints.push_back(robotHandler.right.currentPoseRobot);
+            robotHandler.right.waypoints.push_back(robotHandler.right.currentPoseRobot);
+        }
         robotHandler.right.finalTargetPose = robotHandler.right.targetPose;
-        robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
+        // robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
+        robotHandler.right.waypoints.push_back(robotHandler.right.finalTargetPose.pose);
         
     }
 }
@@ -296,13 +243,20 @@ void leftTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
     robotHandler.left.trigger = msg->data;
     if((int) msg->data == 1)
     {
+        if(robotHandler.left.waypoints.empty())
+        {
+            robotHandler.left.waypoints.push_back(robotHandler.left.currentPoseRobot);
+            robotHandler.left.waypoints.push_back(robotHandler.left.currentPoseRobot);
+        }
         robotHandler.left.finalTargetPose = robotHandler.left.targetPose;
-        robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
+        // robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
+        robotHandler.left.waypoints.push_back(robotHandler.left.finalTargetPose.pose);
     }
 
 }
 
-// If pressed => move robot 
+// Set the state of the menu button
+// Note, if menu == 1 => controller pose can move relative to robot
 void rightMenuCallback(const std_msgs::Int32::ConstPtr& msg)
 {
     robotHandler.right.menu = msg->data;
@@ -312,23 +266,29 @@ void leftMenuCallback(const std_msgs::Int32::ConstPtr& msg)
     robotHandler.left.menu = msg->data;
 }
 
+// -- Move the robot according to the saved poses in waypoints --
 void rightGripCallback(const std_msgs::Int32::ConstPtr& msg)
 {
-    robotHandler.left.grip = msg->data;
-    if(msg->data == 1)
+    robotHandler.right.grip = msg->data;
+    if(msg->data == 1 && robotHandler.right.waypoints.size() > 2)
     {
-        moveRobot();
+        trajectory_msgs::JointTrajectory trajectory = robotHandler.right.PlanJointTrajectory();
+        robotHandler.right.waypoints.clear();
+        pub_right_controller.publish(trajectory);
     }
 }
 
 void leftGripCallback(const std_msgs::Int32::ConstPtr& msg)
 {
     robotHandler.left.grip = msg->data;
-    if(msg->data == 1)
+    if(msg->data == 1 && robotHandler.left.waypoints.size() > 2)
     {
-        moveRobot();
+        trajectory_msgs::JointTrajectory trajectory = robotHandler.left.PlanJointTrajectory();
+        robotHandler.left.waypoints.clear();
+        pub_left_controller.publish(trajectory);
     }
 }
+// -- --
 
 
 // Help functions
@@ -345,22 +305,3 @@ void AddPose(geometry_msgs::Pose &pose, geometry_msgs::Pose originPose)
     pose.position.y += originPose.position.y;
     pose.position.z += originPose.position.z;
 }
-
-
-
-// void RobotArm::PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p){
-//     this->waypoints.clear();
-//     this->waypoints.push_back(this->targetPose);
-
-//     char charEndLinkName[this->endLinkName.length() + 1]; 
-//     strcpy(charEndLinkName, this->endLinkName.c_str()); 
-
-//     move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
-//     this->my_plan.trajectory_ = this->trajectory;
-//     move_group_p->execute(this->my_plan);
-// }
-
-// RobotHandler::RobotHandler(){
-//     left.parentRobotHandler = this;
-//     right.parentRobotHandler = this;
-// };
