@@ -18,6 +18,7 @@
 #include <vector>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <trajectory_msgs/JointTrajectory.h>
 
 // void triggerCallback(const std_msgs::Float32::ConstPtr& msg);
 void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
@@ -43,18 +44,28 @@ class RobotArm {
         geometry_msgs::PoseStamped targetPose;
         geometry_msgs::PoseStamped finalTargetPose;
         geometry_msgs::PoseStamped VR_rawPose;
-        std::vector<geometry_msgs::Pose> waypoints;
-        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+        geometry_msgs::Pose currentPoseRobot; // Used for calculation VR controller transformation
+        geometry_msgs::Pose VR_startingPose; // Used for calculation VR controller transformation
         moveit_msgs::RobotTrajectory trajectory;
+        std::string endLinkName;
+
+        // States of robot
         int menu = 0;
         int grip = 0;
         float trigger = 0;
-        std::string endLinkName;
-        geometry_msgs::Pose currentPoseRobot;
-        geometry_msgs::Pose VR_startingPose;
-        const double jump_threshold = 0.5; 
-        const double eef_step = 0.01;
+        
+        // Cartesian path variables
+        const double jump_threshold = 0.0; // Variable used in cartesian planning
+        const double eef_step = 0.01; // Variable used in cartesian planning
+        std::vector<geometry_msgs::Pose> waypoints; // The path the robot shall move through (cartesian path planning)
+        moveit::planning_interface::MoveGroupInterface *move_group_p; // Should be the move_group of ONE arm
+        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+
     // void PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p);
+        // This can control ONE arm at a time
+        // send the movegroup of the arm you wanna plan for
+        // OBSERVE most IK solvers cannot solve for the dual arm -> one arm at the time
+        // Send the move_group of the individual arm NOT dual arm
         void PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p){
             this->waypoints.clear();
             this->waypoints.push_back(this->targetPose.pose);
@@ -67,7 +78,28 @@ class RobotArm {
             move_group_p->execute(this->my_plan);
         };
 
-    
+        // Calculates a trajectory for the panda arm.
+        // This is used to control the both arms at the same time to manually send the control message to 
+        // the robot's controller. /robot_id/controller/command (Se link for more information:
+        // https://answers.ros.org/question/335836/moveit-moveit_ros_move_groupmove_group-nodes-in-a-namespace/
+        trajectory_msgs::JointTrajectory PlanJointTrajectory()
+        {
+            this->waypoints.push_back(this->targetPose.pose);
+
+            char charEndLinkName[this->endLinkName.length() + 1]; 
+            strcpy(charEndLinkName, this->endLinkName.c_str()); 
+            
+            move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
+            // To fix error with not increasing time (rather ugly solution but it works, fix if possible)
+            for(int i = 0; i < this->trajectory.joint_trajectory.points.size(); i++)
+            {
+                // std::cout << this->trajectory.joint_trajectory.points[i].time_from_start << std::endl;
+                this->trajectory.joint_trajectory.points[i].time_from_start += ros::Duration((double) i*0.001);
+            }
+
+            return this->trajectory.joint_trajectory;
+        }
+
 };
 
 class RobotHandler {

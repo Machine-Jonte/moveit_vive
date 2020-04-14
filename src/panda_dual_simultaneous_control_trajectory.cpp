@@ -26,6 +26,8 @@
 RobotHandler robotHandler;
 ros::Publisher pub_left;
 ros::Publisher pub_right;
+ros::Publisher pub_right_controller;
+ros::Publisher pub_left_controller;
 // geometry_msgs::Pose currentPose;
 
 tf2_ros::Buffer tfBuffer;
@@ -118,7 +120,9 @@ int main(int argc, char *argv[])
 
     // Setup MoveIt!
     static const std::string PLANNING_GROUP = arm_id;
-    moveit::planning_interface::MoveGroupInterface move_group("panda2");
+    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
+    moveit::planning_interface::MoveGroupInterface move_group_right("panda1");
+    moveit::planning_interface::MoveGroupInterface move_group_left("panda2");
     // move_group.setEndEffectorLink("panda_1_link8");
     // move_group.setEndEffectorLink("panda_2_link8");
 
@@ -130,61 +134,6 @@ int main(int argc, char *argv[])
     const robot_state::JointModelGroup* joint_model_group = move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
 
-    // ----- SIMPLE TEST TO SEE THAT IT WORKS -----
-    // std::vector<geometry_msgs::Pose> waypoints;
-    // std::vector<geometry_msgs::Pose> waypoints2;
-    geometry_msgs::Pose target_pose_left;
-    // geometry_msgs::Pose target_pose_right;
-    target_pose_left = robotHandler.move_group_p->getCurrentPose().pose;
-    // target_pose_left = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName).pose;
-    // target_pose_right = move_group.getCurrentPose(robotHandler.right.endLinkName).pose;
-    // printf("Current Pose: x: %f, y: %f, z: %f \n", target_pose_left.position.x, target_pose_left.position.y, target_pose_left.position.z);
-    // target_pose1.position.x = 0.5;
-    // target_pose1.position.y = 0.0;
-    robotHandler.left.waypoints.push_back(move_group.getCurrentPose().pose);
-    robotHandler.left.waypoints.push_back(move_group.getCurrentPose().pose);
-    // robotHandler.left.waypoints.push_back(move_group.getCurrentPose(robotHandler.left.endLinkName).pose);
-    // robotHandler.left.waypoints.push_back(move_group.getCurrentPose(robotHandler.left.endLinkName).pose);
-    // robotHandler.right.waypoints.push_back(move_group.getCurrentPose(robotHandler.right.endLinkName).pose);
-    // robotHandler.right.waypoints.push_back(move_group.getCurrentPose(robotHandler.right.endLinkName).pose);
-    target_pose_left.position.z += 0.2;
-    // target_pose_right.position.z += 0.3;
-
-    // move_group.setPoseTarget(target_pose_left);
-    // move_group.setPoseTarget(target_pose_left, robotHandler.left.endLinkName);
-    // move_group.setPoseTarget(target_pose_right, robotHandler.right.endLinkName);
-
-    // waypoints2.clear();
-    robotHandler.left.waypoints.push_back(target_pose_left);
-    // robotHandler.right.waypoints.push_back(target_pose_right);
-
-    moveit_msgs::RobotTrajectory trajectory;
-    // const double jump_threshold = 0.5; 
-    const double jump_threshold = 0.0; 
-    // const double eef_step = 0.01;
-    const double eef_step = 0.01;
-    move_group.computeCartesianPath(robotHandler.left.waypoints, eef_step, jump_threshold, trajectory);
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    std::cout << "Number of Points: " << trajectory.joint_trajectory.points.size() << std::endl;
-    std::cout << "Time: " << trajectory.joint_trajectory.points[0].time_from_start << std::endl;
-    for(int i = 0; i < trajectory.joint_trajectory.points.size(); i++)
-    {
-        trajectory.joint_trajectory.points[i].time_from_start = ros::Duration((double) i*0.1);
-    }
-    my_plan.trajectory_ = trajectory;
-    // std::cout << my_plan.planning_time_ << std::endl;
-    // my_plan.planning_time_ = 5.0;
-    move_group.execute(my_plan);
-    // move_group.move();
-
-    // move_group.computeCartesianPath(robotHandler.right.waypoints, eef_step, jump_threshold, trajectory, "panda_2_link8");
-    // moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
-    // my_plan.trajectory_ = trajectory;
-    // move_group.execute(my_plan2);
-
-
-    // move_group.asyncMove();
-    // ----- END SIMPLE TEST -----
     
     // Setup ROS subscribers and publishers
     // LEFT
@@ -194,6 +143,8 @@ int main(int argc, char *argv[])
     ros::Subscriber sub_menu_left = node_handle.subscribe("/vive/controller/left/buttons/menu", 1, leftMenuCallback);
     ros::Subscriber sub_grip_left = node_handle.subscribe("/vive/controller/left/buttons/grip", 1, leftGripCallback);
     pub_left = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/left/processed/pose", 1);
+    pub_left_controller = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_2_arm_controller/command", 10);
+
 
     // RIGHT
     // ros::Subscriber sub_processed_right = node_handle.subscribe("/vive/controller/right/processed/pose", 1, controllerCallbackProcessed);
@@ -202,6 +153,7 @@ int main(int argc, char *argv[])
     ros::Subscriber sub_menu_right = node_handle.subscribe("/vive/controller/right/buttons/menu", 1, rightMenuCallback);
     ros::Subscriber sub_grip_right = node_handle.subscribe("/vive/controller/right/buttons/grip", 1, rightGripCallback);
     pub_right = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/right/processed/pose", 1);
+    pub_right_controller = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_1_arm_controller/command", 10);
 
     //Start running loop
     ros::Rate loop_rate(1);
@@ -254,7 +206,7 @@ void ControlProcessPose(RobotArm &robotArm)
 void DualControlProcessPose(){
     if(!robotHandler.busy)
     {
-        robotHandler.busy = true;
+        robotHandler.busy = true; // Unsure if needed
 
         robotHandler.left.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName).pose;
         robotHandler.right.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.right.endLinkName).pose;
@@ -266,7 +218,7 @@ void DualControlProcessPose(){
 
         // moveRobot();
 
-        robotHandler.busy = false;
+        robotHandler.busy = false;// Unsure if needed
     }
 }
 

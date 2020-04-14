@@ -59,6 +59,11 @@ add_dependencies(panda_dual_control moveit_vive)
 add_executable(panda_dual_simultaneous_control src/panda_dual_simultaneous_control.cpp)
 target_link_libraries(panda_dual_simultaneous_control ${catkin_LIBRARIES})
 add_dependencies(panda_dual_simultaneous_control moveit_vive)
+
+add_executable(panda_dual_simultaneous_control_trajectory src/panda_dual_simultaneous_control_trajectory.cpp)
+target_link_libraries(panda_dual_simultaneous_control_trajectory ${catkin_LIBRARIES})
+add_dependencies(panda_dual_simultaneous_control_trajectory moveit_vive)
+
 # target_link_libraries(
 #   ${catkin_LIBRARIES} ${EIGEN_LIBRARY}
 # )
