@@ -11,5 +11,16 @@
     <!-- <param name="controller_id" type="str" value="left"/> -->
   </node>
 
+  <node name="panda_right_gripper" pkg="moveit_vive" type="gripper_control.py">
+    <!-- <param name="arm_id" type="str" value="panda2"/> -->
+    <param name="controller_id" type="str" value="right"/>
+  </node>
+
+  <node name="panda_left_gripper" pkg="moveit_vive" type="gripper_control.py">
+    <!-- <param name="arm_id" type="str" value="panda2"/> -->
+    <param name="controller_id" type="str" value="left"/>
+  </node>
+
+
 </launch>
  
