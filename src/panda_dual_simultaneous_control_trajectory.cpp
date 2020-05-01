@@ -14,9 +14,15 @@
 #include <cmath>
 
 #include <tf2_ros/transform_listener.h>
+#include "tf/LinearMath/Transform.h"
+#include "tf/transform_datatypes.h"
 #include <string>
 #include <vector>
+
 #include <time.h>
+#include <chrono>
+// #include <Quaternion.h>
+#include <tf2/LinearMath/Scalar.h>
 // #include "LinearMath/btMatrix3x3.h"
 
 #define _USE_MATH_DEFINES
@@ -26,13 +32,28 @@
 RobotHandler robotHandler;
 ros::Publisher pub_left;
 ros::Publisher pub_right;
-ros::Publisher pub_right_controller;
-ros::Publisher pub_left_controller;
+// ros::Publisher pub_right_controller;
+// ros::Publisher pub_left_controller;
 // geometry_msgs::Pose currentPose;
+bool online_tracking;
+
+PublishHandlerRobotState robotPublisher;
 
 tf2_ros::Buffer tfBuffer;
 // clock_t action_clock;
 
+std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+// std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+
+double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose2)
+{
+    return sqrt(
+        pow(pose1.position.x - pose2.position.x, 2) +
+        pow(pose1.position.y - pose2.position.y, 2) +
+        pow(pose1.position.z - pose2.position.z, 2)
+    );
+}
 
 double deg2rad (double degrees) {
     return degrees * 4.0 * atan (1.0) / 180.0;
@@ -64,6 +85,9 @@ Quaternion ToQuaternion(double yaw, double pitch, double roll) // yaw (Z), pitch
 
 struct EulerAngles {
     double roll, pitch, yaw;
+    double sum(){
+        return roll + pitch + yaw;
+    }
 };
 
 EulerAngles ToEulerAngles(Quaternion q) {
@@ -111,12 +135,15 @@ int main(int argc, char *argv[])
     ros::init(argc, argv, "panda_dual_control_moveit_vive");
     tf2_ros::TransformListener tfListener(tfBuffer);
     ros::NodeHandle node_handle("~");
-    ros::AsyncSpinner spinner(1);
+    ros::AsyncSpinner spinner(4);
     spinner.start();
 
     // Read param data
     std::string arm_id;
+    std::string online_tracking_str;
     node_handle.param<std::string>("arm_id", arm_id, "dual");
+    node_handle.param<std::string>("online_tracking", online_tracking_str, "1");
+    online_tracking = std::stoi(online_tracking_str);
 
     // Setup MoveIt!
     static const std::string PLANNING_GROUP = arm_id;
@@ -133,6 +160,7 @@ int main(int argc, char *argv[])
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
     robotHandler.right.move_group_p = &move_group_right;
     robotHandler.left.move_group_p = &move_group_left;
+    // move_group.getCurrentJointValues();
     
     // -- Setup ROS subscribers and publishers --
     // LEFT
@@ -142,7 +170,7 @@ int main(int argc, char *argv[])
     ros::Subscriber sub_menu_left = node_handle.subscribe("/vive/controller/left/buttons/menu", 1, leftMenuCallback);
     ros::Subscriber sub_grip_left = node_handle.subscribe("/vive/controller/left/buttons/grip", 1, leftGripCallback);
     pub_left = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/left/processed/pose", 1);
-    pub_left_controller = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_2_arm_controller/command", 10);
+    robotHandler.left.controller_pub = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_2_arm_controller/command", 10);
 
 
     // RIGHT
@@ -152,14 +180,29 @@ int main(int argc, char *argv[])
     ros::Subscriber sub_menu_right = node_handle.subscribe("/vive/controller/right/buttons/menu", 1, rightMenuCallback);
     ros::Subscriber sub_grip_right = node_handle.subscribe("/vive/controller/right/buttons/grip", 1, rightGripCallback);
     pub_right = node_handle.advertise<geometry_msgs::PoseStamped>("/vive/controller/right/processed/pose", 1);
-    pub_right_controller = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_1_arm_controller/command", 10);
+    robotHandler.right.controller_pub = node_handle.advertise<trajectory_msgs::JointTrajectory>("/panda_1_arm_controller/command", 10);
     // -- --
+
+    // robotPublisher.currentState = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/currentState", 1);
+    robotPublisher.jointValues = node_handle.advertise<std_msgs::Float32MultiArray>("/robot/jointValues", 1);
+    robotPublisher.targetPose = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/targetPose", 1);
+
+    robotHandler.left.currentPose_pub = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/left/currentState", 1);
+    robotHandler.right.currentPose_pub = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/right/currentState", 1);
+
+    robotHandler.left.targetPose_pub = node_handle.advertise<geometry_msgs::PoseArray>("/robot/left/targetPose", 1);
+    robotHandler.right.targetPose_pub = node_handle.advertise<geometry_msgs::PoseArray>("/robot/right/targetPose", 1);
+
+    // robotHandler.left.targetPose_pub = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/left/targetPose", 1);
+    // robotHandler.right.targetPose_pub = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/right/targetPose", 1);
+
+
+    robotHandler.right.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/right/visualization_marker", 1);
+    robotHandler.left.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/left/visualization_marker", 1);
 
     //Start running loop
     ros::Rate loop_rate(1);
     while (ros::ok()) {
-        ros::AsyncSpinner spinner(1); 
-        spinner.start();
         ros::spinOnce();
         loop_rate.sleep();
     }
@@ -167,11 +210,77 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-
-// Move robot
-void moveRobot()
+void moveRobot(RobotArm &robotArm)
 {
-    robotHandler.move_group_p->asyncMove();
+    if(ros::Time::now().toSec() > robotArm.executionTimeEnd){
+        robotArm.waypoints = robotArm.waypointsWaiting;
+        robotArm.waypointsWaiting.clear();
+
+        double success = robotArm.PlanJointTrajectory();
+        std::cout << ":::I'M TRYING TO MOVE THE ROBOT:::\nSuccess:" << success << std::endl;
+        trajectory_msgs::JointTrajectory trajectory = robotArm.trajectory.joint_trajectory;
+        
+        robotArm.executionTimeEnd = trajectory.points.back().time_from_start.toSec() + ros::Time::now().toSec();
+
+        geometry_msgs::PoseArray targetPose_msg = geometry_msgs::PoseArray();
+        targetPose_msg.header.frame_id = "/world";
+        targetPose_msg.header.stamp = ros::Time::now();
+        targetPose_msg.poses = robotArm.waypoints;
+        robotArm.targetPose_pub.publish(targetPose_msg);
+
+        trajectory.header.stamp = ros::Time::now() + ros::Duration(0.1);
+        robotArm.controller_pub.publish(trajectory);
+    }
+    else{
+        // If you want the robot to follow all your movements, uncomment this
+        // However, it becomes much slower, and more awkward to control.
+        robotArm.waypointsWaiting.clear();
+    }
+}
+
+void PublishVisualization(RobotArm robotArm)
+{
+    visualization_msgs::Marker points, line_strip;
+
+    points.header.frame_id = line_strip.header.frame_id = "/world";
+    points.header.stamp = line_strip.header.stamp = ros::Time::now();
+    points.ns = line_strip.ns = "points_and_lines";
+    points.action = line_strip.action = visualization_msgs::Marker::ADD;
+    points.pose.orientation.w = line_strip.pose.orientation.w = 1.0;
+
+
+    points.id = 0;
+    line_strip.id = 1;
+ 
+    points.type = visualization_msgs::Marker::POINTS;
+    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+
+    // POINTS markers use x and y scale for width/height respectively
+    points.scale.x = 0.05;
+    points.scale.y = 0.05;
+    // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
+    line_strip.scale.x = 0.01;
+    // Points are green
+    points.color.g = 1.0f;
+    points.color.a = 1.0;
+    // Line strip is blue
+    line_strip.color.b = 1.0;
+    line_strip.color.a = 1.0;
+
+    for(int i = 0; i < robotArm.waypoints_draw.size(); i++)
+    {
+        geometry_msgs::Point p;
+        p.x = robotArm.waypoints_draw[i].position.x;
+        p.y = robotArm.waypoints_draw[i].position.y;
+        p.z = robotArm.waypoints_draw[i].position.z;
+
+        points.points.push_back(p);
+        line_strip.points.push_back(p);
+    }
+    robotArm.visualization_pub.publish(points);
+    robotArm.visualization_pub.publish(line_strip);
+
+    // visualization_pub.publish
 }
 
 void ControlProcessPose(RobotArm &robotArm)
@@ -179,11 +288,50 @@ void ControlProcessPose(RobotArm &robotArm)
     if(!robotArm.menu)
     {
         robotArm.VR_startingPose = robotArm.VR_rawPose.pose;
+        robotArm.basePose = robotArm.currentPoseRobot;
     }
     geometry_msgs::PoseStamped poseStamped = copyPose(robotArm.VR_rawPose);
     SubtractPose(poseStamped.pose, robotArm.VR_startingPose);
-    AddPose(poseStamped.pose, robotArm.currentPoseRobot);
+    if(robotArm.waypoints.empty() || online_tracking)
+    {
+        AddPose(poseStamped.pose, robotArm.basePose.pose);
+    } else {
+        AddPose(poseStamped.pose, robotArm.waypoints.back());
+    }
     robotArm.targetPose = poseStamped;
+}
+
+void onlineUpdate(RobotArm &robotArm){
+    if(robotArm.menu){
+        tf2::Quaternion q_target, q_current;// q_rel;
+        tf2::convert(robotArm.targetPose.pose.orientation, q_target);
+        tf2::convert(robotArm.currentPoseRobot.pose.orientation, q_current);
+
+        // q_rel = q_target * q_current.inverse();
+        // q_rel.normalize();
+
+        // EulerAngles angles = ToEulerAngles(q_rel);
+        tf2Scalar angle = q_target.angleShortestPath(q_current);
+        std::cout << "Difference in angle::::" << angle << std::endl;
+
+
+        robotArm.finalTargetPose = robotArm.targetPose;
+        if(!robotArm.waypoints.empty())
+        {
+            double distance = abs( euclideanDistancePose(robotArm.waypoints.back(),
+                    robotArm.currentPoseRobot.pose) );
+                
+            std::cout << "Distance:::::" << distance << std::endl;
+        }
+        
+        double error_distance = 0.03;
+        // Only move if target is sufficiently different from current pose
+        if(euclideanDistancePose(robotArm.currentPoseRobot.pose, robotArm.targetPose.pose) > error_distance || angle > 0.1)
+        {
+            robotArm.waypointsWaiting.push_back(robotArm.targetPose.pose);
+            moveRobot(robotArm);
+        }
+    }
 }
 
 void DualControlProcessPose(){
@@ -191,50 +339,88 @@ void DualControlProcessPose(){
     {
         robotHandler.busy = true; // Unsure if needed
 
-        robotHandler.left.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName).pose;
-        robotHandler.right.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.right.endLinkName).pose;
+        robotHandler.left.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.left.endLinkName);
+        robotHandler.right.currentPoseRobot = robotHandler.move_group_p->getCurrentPose(robotHandler.right.endLinkName);
+        std::vector<double> jointValues = robotHandler.move_group_p->getCurrentJointValues();
+        // robotHandler.left.jointValues = robotHandler.move_group_p->getCurrentJointValues();
         ControlProcessPose(robotHandler.left);
         ControlProcessPose(robotHandler.right);
             
         pub_left.publish(robotHandler.left.targetPose);
         pub_right.publish(robotHandler.right.targetPose);
 
-        // moveRobot();
+        // Publish data so that it can be used else where
+        robotHandler.right.currentPose_pub.publish(robotHandler.right.currentPoseRobot);
+        robotHandler.left.currentPose_pub.publish(robotHandler.left.currentPoseRobot);
+
+
+        robotPublisher.jointValues.publish(jointValues);
+        robotPublisher.currentState.publish(robotHandler.left.currentPoseRobot);
+        robotPublisher.currentState.publish(robotHandler.right.currentPoseRobot);
+
+        PublishVisualization(robotHandler.left);
+        PublishVisualization(robotHandler.right);
+
+        // if(online_tracking)
+        // {
+        //     std::cout << "Distance" << euclideanDistancePose(
+        //             robotHandler.left.targetPose.pose,
+        //             robotHandler.left.finalTargetPose.pose    
+        //         ) << std::endl;
+
+        //     if(robotHandler.left.menu)
+        //     {   
+        //         onlineUpdate(robotHandler.left);
+        //     }
+        //     if(robotHandler.right.menu)
+        //     {
+        //         onlineUpdate(robotHandler.right);
+        //     }
+        // }
 
         robotHandler.busy = false;// Unsure if needed
     }
 }
 
 // Process the pose from the VR to match robot (without this the pose would not be centered around the end effector)
-// It would be prefferable to combine both of the callbacks as they are redicously similar.
 void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
     robotHandler.right.VR_rawPose = *msg;
     DualControlProcessPose();
+    if(online_tracking){
+        onlineUpdate(robotHandler.right);
+    }
 }
 
 void leftControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
     robotHandler.left.VR_rawPose = *msg;
     DualControlProcessPose();
+    if(online_tracking){
+        onlineUpdate(robotHandler.left);
+    }
 }
 
-
+void addTarget(RobotArm &robotArm)
+{
+    if(robotArm.waypoints.empty())
+    {
+        robotArm.waypoints.push_back(robotArm.currentPoseRobot.pose);
+        robotArm.waypoints.push_back(robotArm.currentPoseRobot.pose);
+    }
+    robotArm.finalTargetPose = robotArm.targetPose;
+    // robotArmgroup_p->setPoseTarget(robotArm.finalTargetPose.pose, robotArm.endLinkName);
+    robotArm.waypoints.push_back(robotArm.finalTargetPose.pose);
+    robotArm.VR_startingPose = robotArm.VR_rawPose.pose;
+    robotArm.waypoints_draw = robotArm.waypoints;
+}
 // Add controller pose to waypoints
 void rightTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
 {
     robotHandler.right.trigger = msg->data;
     if((int) msg->data == 1)
     {
-        if(robotHandler.right.waypoints.empty())
-        {
-            robotHandler.right.waypoints.push_back(robotHandler.right.currentPoseRobot);
-            robotHandler.right.waypoints.push_back(robotHandler.right.currentPoseRobot);
-        }
-        robotHandler.right.finalTargetPose = robotHandler.right.targetPose;
-        // robotHandler.move_group_p->setPoseTarget(robotHandler.right.finalTargetPose.pose, robotHandler.right.endLinkName);
-        robotHandler.right.waypoints.push_back(robotHandler.right.finalTargetPose.pose);
-        
+        addTarget(robotHandler.right);
     }
 }
 
@@ -243,14 +429,7 @@ void leftTriggerCallback(const std_msgs::Float32::ConstPtr& msg)
     robotHandler.left.trigger = msg->data;
     if((int) msg->data == 1)
     {
-        if(robotHandler.left.waypoints.empty())
-        {
-            robotHandler.left.waypoints.push_back(robotHandler.left.currentPoseRobot);
-            robotHandler.left.waypoints.push_back(robotHandler.left.currentPoseRobot);
-        }
-        robotHandler.left.finalTargetPose = robotHandler.left.targetPose;
-        // robotHandler.move_group_p->setPoseTarget(robotHandler.left.finalTargetPose.pose, robotHandler.left.endLinkName);
-        robotHandler.left.waypoints.push_back(robotHandler.left.finalTargetPose.pose);
+        addTarget(robotHandler.left);
     }
 
 }
@@ -272,9 +451,7 @@ void rightGripCallback(const std_msgs::Int32::ConstPtr& msg)
     robotHandler.right.grip = msg->data;
     if(msg->data == 1 && robotHandler.right.waypoints.size() > 2)
     {
-        trajectory_msgs::JointTrajectory trajectory = robotHandler.right.PlanJointTrajectory();
-        robotHandler.right.waypoints.clear();
-        pub_right_controller.publish(trajectory);
+        moveRobot(robotHandler.right);
     }
 }
 
@@ -283,9 +460,7 @@ void leftGripCallback(const std_msgs::Int32::ConstPtr& msg)
     robotHandler.left.grip = msg->data;
     if(msg->data == 1 && robotHandler.left.waypoints.size() > 2)
     {
-        trajectory_msgs::JointTrajectory trajectory = robotHandler.left.PlanJointTrajectory();
-        robotHandler.left.waypoints.clear();
-        pub_left_controller.publish(trajectory);
+        moveRobot(robotHandler.left);
     }
 }
 // -- --
