@@ -4,6 +4,11 @@ project(moveit_vive)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
+# file(GLOB SHARED_SRC_FILES
+#   ${SHARED_SRC_DIR}/*.cpp
+#   ${SHARED_SRC_DIR}/*.h
+# )
+
 # FIND_LIBRARY(EIGEN_LIBRARY Eigen ~/libraries/c++/eigen)
 # INCLUDE_DIRECTORIES(~/libraries/c++/eigen)
 # LINK_DIRECTORIES(~/libraries/c++/eigen)
@@ -42,27 +47,35 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
-  # ${EIGEN_LIBRARY}
 )
 
 
 add_executable(vive_moveit_jointConstraints src/vive_moveit_jointConstraints.cpp)
 target_link_libraries(vive_moveit_jointConstraints ${catkin_LIBRARIES})
-add_dependencies(vive_moveit_jointConstraints moveit_vive)
+
+# add_dependencies(vive_moveit_jointConstraints moveit_vive)
 
 add_executable(panda_dual_control src/panda_dual_control.cpp)
 target_link_libraries(panda_dual_control ${catkin_LIBRARIES})
-add_dependencies(panda_dual_control moveit_vive)
+# add_dependencies(panda_dual_control moveit_vive)
 
 add_executable(panda_dual_simultaneous_control src/panda_dual_simultaneous_control.cpp)
 target_link_libraries(panda_dual_simultaneous_control ${catkin_LIBRARIES})
-add_dependencies(panda_dual_simultaneous_control moveit_vive)
+# add_dependencies(panda_dual_simultaneous_control moveit_vive)
 
-add_executable(panda_dual_simultaneous_control_trajectory src/panda_dual_simultaneous_control_trajectory.cpp)
-target_link_libraries(panda_dual_simultaneous_control_trajectory ${catkin_LIBRARIES})
-add_dependencies(panda_dual_simultaneous_control_trajectory moveit_vive)
+add_executable(panda_dual_simultaneous_control_trajectory
+  src/panda_dual_simultaneous_control_trajectory.cpp
+  src/moveit_workspace.cpp
+)
+
+target_link_libraries(
+  panda_dual_simultaneous_control_trajectory 
+  ${catkin_LIBRARIES} 
+)
+
+# add_dependencies(panda_dual_simultaneous_control_trajectory moveit_vive)
 
 # target_link_libraries(
 #   ${catkin_LIBRARIES} ${EIGEN_LIBRARY}

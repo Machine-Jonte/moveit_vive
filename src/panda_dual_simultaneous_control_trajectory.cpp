@@ -25,6 +25,14 @@
 #include <tf2/LinearMath/Scalar.h>
 // #include "LinearMath/btMatrix3x3.h"
 
+#include <moveit_msgs/Constraints.h>
+#include <moveit_msgs/PositionConstraint.h>
+
+#include "moveit_workspace.h"
+
+#include "angle_helper.h"
+
+
 #define _USE_MATH_DEFINES
 
 
@@ -45,89 +53,6 @@ tf2_ros::Buffer tfBuffer;
 std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
-
-double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose2)
-{
-    return sqrt(
-        pow(pose1.position.x - pose2.position.x, 2) +
-        pow(pose1.position.y - pose2.position.y, 2) +
-        pow(pose1.position.z - pose2.position.z, 2)
-    );
-}
-
-double deg2rad (double degrees) {
-    return degrees * 4.0 * atan (1.0) / 180.0;
-}
-
-struct Quaternion
-{
-    double w, x, y, z;
-};
-
-Quaternion ToQuaternion(double yaw, double pitch, double roll) // yaw (Z), pitch (Y), roll (X)
-{
-    // Abbreviations for the various angular functions
-    double cy = cos(yaw * 0.5);
-    double sy = sin(yaw * 0.5);
-    double cp = cos(pitch * 0.5);
-    double sp = sin(pitch * 0.5);
-    double cr = cos(roll * 0.5);
-    double sr = sin(roll * 0.5);
-
-    Quaternion q;
-    q.w = cy * cp * cr + sy * sp * sr;
-    q.x = cy * cp * sr - sy * sp * cr;
-    q.y = sy * cp * sr + cy * sp * cr;
-    q.z = sy * cp * cr - cy * sp * sr;
-
-    return q;
-}
-
-struct EulerAngles {
-    double roll, pitch, yaw;
-    double sum(){
-        return roll + pitch + yaw;
-    }
-};
-
-EulerAngles ToEulerAngles(Quaternion q) {
-    EulerAngles angles;
-
-    // roll (x-axis rotation)
-    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-    double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-    angles.roll = std::atan2(sinr_cosp, cosr_cosp);
-
-    // pitch (y-axis rotation)
-    double sinp = 2 * (q.w * q.y - q.z * q.x);
-    if (std::abs(sinp) >= 1)
-        angles.pitch = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
-    else
-        angles.pitch = std::asin(sinp);
-
-    // yaw (z-axis rotation)
-    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-    double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-    angles.yaw = std::atan2(siny_cosp, cosy_cosp);
-
-    return angles;
-}
-
-Quaternion ToQuaternionFromMsg(geometry_msgs::Pose pose)
-{
-    Quaternion q;
-    q.x = pose.orientation.x;
-    q.y = pose.orientation.y;
-    q.z = pose.orientation.z;
-    q.w = pose.orientation.w;
-
-    return q;
-}
-
-geometry_msgs::PoseStamped copyPose(geometry_msgs::PoseStamped poseStamped)
-{
-    return poseStamped;
-}
 
 int main(int argc, char *argv[]) 
 {
@@ -160,6 +85,12 @@ int main(int argc, char *argv[])
     robotHandler.move_group_p = &move_group; // This is to easier reach move_group in multiple places in the code
     robotHandler.right.move_group_p = &move_group_right;
     robotHandler.left.move_group_p = &move_group_left;
+
+    MoveItWorkSpace workspaceLeft;
+    MoveItWorkSpace workspaceRight;
+    robotHandler.right.workspace_p = &workspaceRight;
+    robotHandler.left.workspace_p = &workspaceLeft;
+
     // move_group.getCurrentJointValues();
     
     // -- Setup ROS subscribers and publishers --
@@ -200,6 +131,12 @@ int main(int argc, char *argv[])
     robotHandler.right.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/right/visualization_marker", 1);
     robotHandler.left.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/left/visualization_marker", 1);
 
+    // moveit_msgs::Constraints constraints;
+    // constraints.position_constraints;
+    // moveit_msgs::PositionConstraint positionConstraint;
+    // positionConstraint.link_name = robotHandler.left.endLinkName;
+    // positionConstraint.target_point_offset = 
+
     //Start running loop
     ros::Rate loop_rate(1);
     while (ros::ok()) {
@@ -230,57 +167,13 @@ void moveRobot(RobotArm &robotArm)
 
         trajectory.header.stamp = ros::Time::now() + ros::Duration(0.1);
         robotArm.controller_pub.publish(trajectory);
+        robotArm.workspace_p->remove();
     }
     else{
         // If you want the robot to follow all your movements, uncomment this
         // However, it becomes much slower, and more awkward to control.
         robotArm.waypointsWaiting.clear();
     }
-}
-
-void PublishVisualization(RobotArm robotArm)
-{
-    visualization_msgs::Marker points, line_strip;
-
-    points.header.frame_id = line_strip.header.frame_id = "/world";
-    points.header.stamp = line_strip.header.stamp = ros::Time::now();
-    points.ns = line_strip.ns = "points_and_lines";
-    points.action = line_strip.action = visualization_msgs::Marker::ADD;
-    points.pose.orientation.w = line_strip.pose.orientation.w = 1.0;
-
-
-    points.id = 0;
-    line_strip.id = 1;
- 
-    points.type = visualization_msgs::Marker::POINTS;
-    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
-
-    // POINTS markers use x and y scale for width/height respectively
-    points.scale.x = 0.05;
-    points.scale.y = 0.05;
-    // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
-    line_strip.scale.x = 0.01;
-    // Points are green
-    points.color.g = 1.0f;
-    points.color.a = 1.0;
-    // Line strip is blue
-    line_strip.color.b = 1.0;
-    line_strip.color.a = 1.0;
-
-    for(int i = 0; i < robotArm.waypoints_draw.size(); i++)
-    {
-        geometry_msgs::Point p;
-        p.x = robotArm.waypoints_draw[i].position.x;
-        p.y = robotArm.waypoints_draw[i].position.y;
-        p.z = robotArm.waypoints_draw[i].position.z;
-
-        points.points.push_back(p);
-        line_strip.points.push_back(p);
-    }
-    robotArm.visualization_pub.publish(points);
-    robotArm.visualization_pub.publish(line_strip);
-
-    // visualization_pub.publish
 }
 
 void ControlProcessPose(RobotArm &robotArm)
@@ -360,23 +253,6 @@ void DualControlProcessPose(){
 
         PublishVisualization(robotHandler.left);
         PublishVisualization(robotHandler.right);
-
-        // if(online_tracking)
-        // {
-        //     std::cout << "Distance" << euclideanDistancePose(
-        //             robotHandler.left.targetPose.pose,
-        //             robotHandler.left.finalTargetPose.pose    
-        //         ) << std::endl;
-
-        //     if(robotHandler.left.menu)
-        //     {   
-        //         onlineUpdate(robotHandler.left);
-        //     }
-        //     if(robotHandler.right.menu)
-        //     {
-        //         onlineUpdate(robotHandler.right);
-        //     }
-        // }
 
         robotHandler.busy = false;// Unsure if needed
     }
@@ -465,6 +341,56 @@ void leftGripCallback(const std_msgs::Int32::ConstPtr& msg)
 }
 // -- --
 
+
+void PublishVisualization(RobotArm robotArm)
+{
+    visualization_msgs::Marker points, line_strip;
+
+    points.header.frame_id = line_strip.header.frame_id = "/world";
+    points.header.stamp = line_strip.header.stamp = ros::Time::now();
+    points.ns = line_strip.ns = "points_and_lines";
+    points.action = line_strip.action = visualization_msgs::Marker::ADD;
+    points.pose.orientation.w = line_strip.pose.orientation.w = 1.0;
+
+
+    points.id = 0;
+    line_strip.id = 1;
+ 
+    points.type = visualization_msgs::Marker::POINTS;
+    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+
+    // POINTS markers use x and y scale for width/height respectively
+    points.scale.x = 0.05;
+    points.scale.y = 0.05;
+    // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
+    line_strip.scale.x = 0.01;
+    // Points are green
+    points.color.g = 1.0f;
+    points.color.a = 1.0;
+    // Line strip is blue
+    line_strip.color.b = 1.0;
+    line_strip.color.a = 1.0;
+
+    for(int i = 0; i < robotArm.waypoints_draw.size(); i++)
+    {
+        geometry_msgs::Point p;
+        p.x = robotArm.waypoints_draw[i].position.x;
+        p.y = robotArm.waypoints_draw[i].position.y;
+        p.z = robotArm.waypoints_draw[i].position.z;
+
+        points.points.push_back(p);
+        line_strip.points.push_back(p);
+    }
+    robotArm.visualization_pub.publish(points);
+    robotArm.visualization_pub.publish(line_strip);
+
+    // visualization_pub.publish
+}
+
+geometry_msgs::PoseStamped copyPose(geometry_msgs::PoseStamped poseStamped)
+{
+    return poseStamped;
+}
 
 // Help functions
 void SubtractPose(geometry_msgs::Pose &pose, geometry_msgs::Pose startingPose)

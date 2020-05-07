@@ -23,10 +23,12 @@
 #include <trajectory_msgs/JointTrajectory.h>
 // #include <visualization_msgs.h>
 #include <visualization_msgs/Marker.h>
+#include <moveit_msgs/CollisionObject.h>
 
 #include "ros/ros.h"
 
-// void triggerCallback(const std_msgs::Float32::ConstPtr& msg);
+#include "moveit_workspace.h"
+
 void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 void leftControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 void controllerCallbackProcessed(const geometry_msgs::PoseStamped::ConstPtr& msg);
@@ -34,16 +36,14 @@ void SubtractPose(geometry_msgs::Pose &pose, geometry_msgs::Pose startingPose);
 void AddPose(geometry_msgs::Pose &pose, geometry_msgs::Pose originPose);
 void rightMenuCallback(const std_msgs::Int32::ConstPtr& msg);
 void leftMenuCallback(const std_msgs::Int32::ConstPtr& msg);
-// void moveRobot(RobotArm &robotArm);
 void rightTriggerCallback(const std_msgs::Float32::ConstPtr& msg);
 void leftTriggerCallback(const std_msgs::Float32::ConstPtr& msg);
 void rightGripCallback(const std_msgs::Int32::ConstPtr& msg);
 void leftGripCallback(const std_msgs::Int32::ConstPtr& msg);
-
-// void ControlProcessPose(RobotArm &robotArm);
+geometry_msgs::PoseStamped copyPose(geometry_msgs::PoseStamped poseStamped);
 void DualControlProcessPose();
-// geometry_msgs::Pose ControllerProcessPose(geometry_msgs::Pose pose, RobotArm *robotArm);
-// geometry_msgs::Pose ControllerProcessPose(geometry_msgs::Pose pose, RobotArm *robotArm);
+
+
 
 class RobotArm {
     public:
@@ -61,6 +61,7 @@ class RobotArm {
         ros::Publisher targetPose_pub;
         ros::Publisher controller_pub;
         double executionTimeEnd = 0;
+        MoveItWorkSpace *workspace_p;
 
         // std::vector<double> jointValues;
 
@@ -71,13 +72,13 @@ class RobotArm {
         
         // Cartesian path variables
         const double jump_threshold = 0.0; // Variable used in cartesian planning
-        const double eef_step = 0.01; // Variable used in cartesian planning
+        const double eef_step = 0.005; // Variable used in cartesian planning
         std::vector<geometry_msgs::Pose> waypoints; // The path the robot shall move through (cartesian path planning)
         std::vector<geometry_msgs::Pose> waypointsWaiting; // The path the robot shall move through (cartesian path planning)
         moveit::planning_interface::MoveGroupInterface *move_group_p; // Should be the move_group of ONE arm
         moveit::planning_interface::MoveGroupInterface::Plan my_plan;
 
-    // void PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p);
+        // void PlanAndExecuteTrajectory(moveit::planning_interface::MoveGroupInterface *move_group_p);
         // This can control ONE arm at a time
         // send the movegroup of the arm you wanna plan for
         // OBSERVE most IK solvers cannot solve for the dual arm -> one arm at the time
@@ -92,7 +93,7 @@ class RobotArm {
             move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
             this->my_plan.trajectory_ = this->trajectory;
             move_group_p->execute(this->my_plan);
-        };
+        }
 
         // Calculates a trajectory for the panda arm.
         // This is used to control the both arms at the same time to manually send the control message to 
@@ -100,7 +101,14 @@ class RobotArm {
         // https://answers.ros.org/question/335836/moveit-moveit_ros_move_groupmove_group-nodes-in-a-namespace/
         double PlanJointTrajectory()
         {
-            // this->waypoints.push_back(this->targetPose.pose);
+            geometry_msgs::Pose fromPose, toPose;
+            fromPose = this->currentPoseRobot.pose;
+            toPose = this->waypoints.back();
+
+            this->workspace_p->init(fromPose, toPose, this->move_group_p->getPlanningFrame(), this->endLinkName);
+
+            this->workspace_p->calculateWorkspace();
+            this->workspace_p->add();
 
             char charEndLinkName[this->endLinkName.length() + 1]; 
             strcpy(charEndLinkName, this->endLinkName.c_str()); 
@@ -113,6 +121,8 @@ class RobotArm {
                 // std::cout << this->trajectory.joint_trajectory.points[i].time_from_start << std::endl;
                 this->trajectory.joint_trajectory.points[i].time_from_start += ros::Duration((double) i*0.001);
             }
+
+            // this->workspace_p->remove();
 
             // return this->trajectory.joint_trajectory;
             return success;
@@ -137,5 +147,12 @@ class PublishHandlerRobotState
         ros::Publisher targetPose; // End effectors wanted pose
         // ros::Publisher 
 };
+
+
+void moveRobot(RobotArm &robotArm);
+void onlineUpdate(RobotArm &robotArm);
+void ControlProcessPose(RobotArm &robotArm);
+void PublishVisualization(RobotArm robotArm);
+void moveRobot(RobotArm &robotArm);
 
 #endif //PANDA_DUAL__SIMULTANEOUS_CONTROL_H
