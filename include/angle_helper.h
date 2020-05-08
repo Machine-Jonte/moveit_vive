@@ -28,16 +28,6 @@
 #include <moveit_msgs/Constraints.h>
 #include <moveit_msgs/PositionConstraint.h>
 
-
-double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose2)
-{
-    return sqrt(
-        pow(pose1.position.x - pose2.position.x, 2) +
-        pow(pose1.position.y - pose2.position.y, 2) +
-        pow(pose1.position.z - pose2.position.z, 2)
-    );
-}
-
 double deg2rad (double degrees) {
     return degrees * 4.0 * atan (1.0) / 180.0;
 }

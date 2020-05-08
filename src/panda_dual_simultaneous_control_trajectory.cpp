@@ -167,7 +167,10 @@ void moveRobot(RobotArm &robotArm)
 
         trajectory.header.stamp = ros::Time::now() + ros::Duration(0.1);
         robotArm.controller_pub.publish(trajectory);
-        robotArm.workspace_p->remove();
+        // robotHandler.move_group_p->setPoseTarget(robotArm.waypoints.back(), robotArm.endLinkName);
+        // robotHandler.move_group_p->move();
+
+        // robotArm.workspace_p->remove();
     }
     else{
         // If you want the robot to follow all your movements, uncomment this
@@ -405,4 +408,39 @@ void AddPose(geometry_msgs::Pose &pose, geometry_msgs::Pose originPose)
     pose.position.x += originPose.position.x;
     pose.position.y += originPose.position.y;
     pose.position.z += originPose.position.z;
+}
+
+double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose2)
+{
+    return sqrt(
+        pow(pose1.position.x - pose2.position.x, 2) +
+        pow(pose1.position.y - pose2.position.y, 2) +
+        pow(pose1.position.z - pose2.position.z, 2)
+    );
+}
+
+moveit_msgs::BoundingVolume createBoundingVolume(std::vector<double> size, geometry_msgs::Pose boundingBoxPose)
+{
+    moveit_msgs::BoundingVolume boundingVolume;
+
+    shape_msgs::SolidPrimitive primitive;
+    primitive.type = primitive.BOX;
+    primitive.dimensions.resize(3);
+    primitive.dimensions[0] = size[0]; // x
+    primitive.dimensions[1] = size[1]; // y
+    primitive.dimensions[2] = size[2]; // z
+
+    /* A pose for the box (specified relative to frame_id) */
+    geometry_msgs::Pose box_pose;
+    box_pose.orientation.w = 1.0;
+    box_pose.position.x = boundingBoxPose.position.x;
+    box_pose.position.y = boundingBoxPose.position.y;
+    box_pose.position.z = boundingBoxPose.position.z;
+
+    boundingVolume.primitives.push_back(primitive);
+    boundingVolume.primitive_poses.push_back(box_pose);
+    // boundingVolume.operation = boundingVolume.ADD;
+
+
+    return boundingVolume;
 }

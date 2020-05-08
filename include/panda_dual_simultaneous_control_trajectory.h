@@ -25,9 +25,15 @@
 #include <visualization_msgs/Marker.h>
 #include <moveit_msgs/CollisionObject.h>
 
+#include <moveit_msgs/Constraints.h>
+#include <moveit_msgs/PositionConstraint.h>
+
 #include "ros/ros.h"
 
 #include "moveit_workspace.h"
+
+#include <geometry_msgs/Vector3.h>
+#include <moveit_msgs/BoundingVolume.h>
 
 void rightControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 void leftControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
@@ -42,8 +48,10 @@ void rightGripCallback(const std_msgs::Int32::ConstPtr& msg);
 void leftGripCallback(const std_msgs::Int32::ConstPtr& msg);
 geometry_msgs::PoseStamped copyPose(geometry_msgs::PoseStamped poseStamped);
 void DualControlProcessPose();
+double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose2);
 
 
+moveit_msgs::BoundingVolume createBoundingVolume(std::vector<double> size, geometry_msgs::Pose boundingBoxPose);
 
 class RobotArm {
     public:
@@ -72,7 +80,7 @@ class RobotArm {
         
         // Cartesian path variables
         const double jump_threshold = 0.0; // Variable used in cartesian planning
-        const double eef_step = 0.005; // Variable used in cartesian planning
+        const double eef_step = 0.01; // Variable used in cartesian planning
         std::vector<geometry_msgs::Pose> waypoints; // The path the robot shall move through (cartesian path planning)
         std::vector<geometry_msgs::Pose> waypointsWaiting; // The path the robot shall move through (cartesian path planning)
         moveit::planning_interface::MoveGroupInterface *move_group_p; // Should be the move_group of ONE arm
@@ -105,15 +113,61 @@ class RobotArm {
             fromPose = this->currentPoseRobot.pose;
             toPose = this->waypoints.back();
 
-            this->workspace_p->init(fromPose, toPose, this->move_group_p->getPlanningFrame(), this->endLinkName);
+            // this->workspace_p->init(fromPose, toPose, this->move_group_p->getPlanningFrame(), this->endLinkName);
 
-            this->workspace_p->calculateWorkspace();
-            this->workspace_p->add();
+            // this->workspace_p->calculateWorkspace();
+            // this->workspace_p->add();
+
+
+
+
+            moveit_msgs::Constraints constraints;
+            moveit_msgs::PositionConstraint positionConstraint;
+            
+
+            double c = 1.0;
+            double k = 0.1;
+            double dx = ( ( abs(toPose.position.x - fromPose.position.x) ) + k ) * c;
+            double dy = ( ( abs(toPose.position.y - fromPose.position.y) ) + k ) * c;
+            double dz = ( ( abs(toPose.position.z - fromPose.position.z) ) + k ) * c;
+
+        
+
+            positionConstraint.link_name = this->endLinkName;
+
+            geometry_msgs::Pose averagePose;
+            averagePose.orientation.w = 1.0;
+            // averagePose.position.x = (toPose.position.x + fromPose.position.x)/2.0;
+            // averagePose.position.y = (toPose.position.y + fromPose.position.y)/2.0;
+            // averagePose.position.z = (toPose.position.z + fromPose.position.z)/2.0;
+
+            averagePose.position.x = 0.0;
+            averagePose.position.y = 0.0;
+            averagePose.position.z = 0.0;
+
+
+            moveit_msgs::BoundingVolume boundingVolume = createBoundingVolume({dx,dy,dz}, averagePose);
+            positionConstraint.constraint_region = boundingVolume;
+            positionConstraint.header.frame_id = this->endLinkName;
+            positionConstraint.weight = 1.0;
+            // positionConstraint.constraint_region
+
+            // geometry_msgs::Vector3 target_point_offset;
+            // target_point_offset.x = dx;
+            // target_point_offset.y = dy;
+            // target_point_offset.z = dz;
+
+            // positionConstraint.target_point_offset;
+
+            constraints.position_constraints.push_back(positionConstraint);
+
+
 
             char charEndLinkName[this->endLinkName.length() + 1]; 
             strcpy(charEndLinkName, this->endLinkName.c_str()); 
-            
-            double success = move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
+
+            double success = move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, constraints, charEndLinkName);
+            // double success = move_group_p->computeCartesianPath(this->waypoints, this->eef_step, this->jump_threshold, this->trajectory, charEndLinkName);
             // To fix error with not increasing time (rather ugly solution but it works, fix if possible)
             for(int i = 0; i < this->trajectory.joint_trajectory.points.size(); i++)
             {
