@@ -75,6 +75,16 @@ target_link_libraries(
   ${catkin_LIBRARIES} 
 )
 
+add_executable(moveit_controller
+  src/controller/moveit_controller.cpp
+  src/controller/robotarm.cpp
+)
+
+target_link_libraries(
+  moveit_controller 
+  ${catkin_LIBRARIES} 
+)
+
 # add_dependencies(panda_dual_simultaneous_control_trajectory moveit_vive)
 
 # target_link_libraries(

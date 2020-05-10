@@ -44,6 +44,7 @@ ros::Publisher pub_right;
 // ros::Publisher pub_left_controller;
 // geometry_msgs::Pose currentPose;
 bool online_tracking;
+bool trajectory = false;
 
 PublishHandlerRobotState robotPublisher;
 
@@ -75,6 +76,22 @@ int main(int argc, char *argv[])
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     moveit::planning_interface::MoveGroupInterface move_group_right("panda1");
     moveit::planning_interface::MoveGroupInterface move_group_left("panda2");
+
+    // Addition initialization
+    move_group.setPlanningTime(0.5);
+    move_group_right.setPlanningTime(0.5);
+    move_group_left.setPlanningTime(0.5);
+    
+    // move_group.setGoalOrientationTolerance(0.01);
+    // move_group_right.setGoalOrientationTolerance(0.01);
+    // move_group_left.setGoalOrientationTolerance(0.01);
+
+    // move_group.setGoalPositionTolerance(0.01);
+    // move_group_right.setGoalPositionTolerance(0.01);
+    // move_group_left.setGoalPositionTolerance(0.01);
+
+
+    
 
     robotHandler.right.endLinkName = "panda_1_link8";
     robotHandler.left.endLinkName = "panda_2_link8";
@@ -131,12 +148,6 @@ int main(int argc, char *argv[])
     robotHandler.right.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/right/visualization_marker", 1);
     robotHandler.left.visualization_pub = node_handle.advertise<visualization_msgs::Marker>("robot/left/visualization_marker", 1);
 
-    // moveit_msgs::Constraints constraints;
-    // constraints.position_constraints;
-    // moveit_msgs::PositionConstraint positionConstraint;
-    // positionConstraint.link_name = robotHandler.left.endLinkName;
-    // positionConstraint.target_point_offset = 
-
     //Start running loop
     ros::Rate loop_rate(1);
     while (ros::ok()) {
@@ -149,7 +160,8 @@ int main(int argc, char *argv[])
 
 void moveRobot(RobotArm &robotArm)
 {
-    if(ros::Time::now().toSec() > robotArm.executionTimeEnd){
+    // Using IKFast then it appears that using setPose works better than calculating the cartesian path
+    if(ros::Time::now().toSec() > robotArm.executionTimeEnd && trajectory){
         robotArm.waypoints = robotArm.waypointsWaiting;
         robotArm.waypointsWaiting.clear();
 
@@ -166,11 +178,18 @@ void moveRobot(RobotArm &robotArm)
         robotArm.targetPose_pub.publish(targetPose_msg);
 
         trajectory.header.stamp = ros::Time::now() + ros::Duration(0.1);
-        robotArm.controller_pub.publish(trajectory);
-        // robotHandler.move_group_p->setPoseTarget(robotArm.waypoints.back(), robotArm.endLinkName);
-        // robotHandler.move_group_p->move();
+        // robotArm.controller_pub.publish(trajectory);
+        robotHandler.move_group_p->setPoseTarget(robotArm.waypoints.back(), robotArm.endLinkName);
+        robotHandler.move_group_p->asyncMove();
 
         // robotArm.workspace_p->remove();
+    }
+    else if(!trajectory) {
+        robotHandler.move_group_p->setPoseTarget(robotArm.targetPose.pose, robotArm.endLinkName);
+        if(robotArm.lastTimeCommand  + ros::Duration(2.0).toSec() < ros::Time::now().toSec()){
+            robotArm.lastTimeCommand = ros::Time::now().toSec(); 
+            
+        } 
     }
     else{
         // If you want the robot to follow all your movements, uncomment this
@@ -212,17 +231,17 @@ void onlineUpdate(RobotArm &robotArm){
 
 
         robotArm.finalTargetPose = robotArm.targetPose;
-        if(!robotArm.waypoints.empty())
-        {
-            double distance = abs( euclideanDistancePose(robotArm.waypoints.back(),
-                    robotArm.currentPoseRobot.pose) );
+        // if(!robotArm.waypoints.empty())
+        // {
+        //     double distance = abs( euclideanDistancePose(robotArm.waypoints.back(),
+        //             robotArm.currentPoseRobot.pose) );
                 
-            std::cout << "Distance:::::" << distance << std::endl;
-        }
+        //     std::cout << "Distance:::::" << distance << std::endl;
+        // }
         
         double error_distance = 0.03;
         // Only move if target is sufficiently different from current pose
-        if(euclideanDistancePose(robotArm.currentPoseRobot.pose, robotArm.targetPose.pose) > error_distance || angle > 0.1)
+        if(euclideanDistancePose(robotArm.currentPoseRobot.pose, robotArm.targetPose.pose) > error_distance || angle > 0.1 || !trajectory)
         {
             robotArm.waypointsWaiting.push_back(robotArm.targetPose.pose);
             moveRobot(robotArm);
@@ -256,6 +275,15 @@ void DualControlProcessPose(){
 
         PublishVisualization(robotHandler.left);
         PublishVisualization(robotHandler.right);
+        
+        if(robotHandler.lastMoveTime + ros::Duration(2.0).toSec() < ros::Time::now().toSec()
+            && !trajectory && online_tracking
+            && (robotHandler.right.menu || robotHandler.left.menu)){
+            robotHandler.lastMoveTime = ros::Time::now().toSec();
+            robotHandler.move_group_p->asyncMove();
+            // robotHandler.move_group_p->clearPoseTargets();
+            
+        }
 
         robotHandler.busy = false;// Unsure if needed
     }

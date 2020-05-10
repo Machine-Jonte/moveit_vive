@@ -1,0 +1,26 @@
+<launch>
+  <!-- Launch server separatly (better) -->
+  <!-- <include file="$(find vive_ros)/launch/server_vr.launch"> -->
+    <!-- <arg name="moveit_warehouse_database_path" value="$(arg db_path)"/> -->
+  <!-- </include> -->
+
+  <node name="vive_pose" pkg="vive_ros" type="vive_pose"/>
+
+  <node name="moveit_controller" pkg="moveit_vive" type="moveit_controller" output="screen">
+  <!-- To alter this package to fit your robot, add parameters here -->
+  </node>
+
+
+<!-- The gripper is made in a very simple manner and should be considered to be improved if to used -->
+  <node name="panda_right_gripper" pkg="moveit_vive" type="gripper_control.py">
+    <!-- <param name="arm_id" type="str" value="panda2"/> -->
+    <param name="controller_id" type="str" value="right"/>
+  </node>
+
+  <node name="panda_left_gripper" pkg="moveit_vive" type="gripper_control.py">
+    <!-- <param name="arm_id" type="str" value="panda2"/> -->
+    <param name="controller_id" type="str" value="left"/>
+  </node>
+
+
+</launch>

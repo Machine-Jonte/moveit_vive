@@ -55,6 +55,7 @@ moveit_msgs::BoundingVolume createBoundingVolume(std::vector<double> size, geome
 
 class RobotArm {
     public:
+        double lastTimeCommand = 0;
         geometry_msgs::PoseStamped targetPose;
         geometry_msgs::PoseStamped finalTargetPose;
         geometry_msgs::PoseStamped VR_rawPose;
@@ -190,7 +191,9 @@ class RobotHandler {
         RobotArm left;
         RobotArm right;
         bool busy = false;
+        double lastMoveTime = 0;
 };
+
 
 
 class PublishHandlerRobotState
