@@ -78,6 +78,7 @@ target_link_libraries(
 add_executable(moveit_controller
   src/controller/moveit_controller.cpp
   src/controller/robotarm.cpp
+  src/controller/user_interpreter.cpp
 )
 
 target_link_libraries(

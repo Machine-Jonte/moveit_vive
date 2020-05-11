@@ -61,6 +61,7 @@ class RobotArm {
         DataFlowManager io;
         geometry_msgs::PoseStamped targetPose;
         geometry_msgs::PoseStamped startedTrackingPose;
+        geometry_msgs::PoseStamped currentArmPose;
         moveit::planning_interface::MoveGroupInterface *move_group_p;
         
         Robot *fullRobot;

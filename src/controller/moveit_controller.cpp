@@ -24,6 +24,7 @@
 
 // Custom built
 #include "robotarm.h" // This is to control data in and out
+#include "user_interpreter.h"
 
 
 
@@ -72,11 +73,24 @@ int main(int argc, char *argv[])
     robot.left.init(node_handle, leftEndLinkName, leftControllerName);
     robot.move_group_p = &move_group;
 
+
+
+    // User Interpreter (to know when to send commands to move or not)
+    double publish_frequency = 10;
+    UserInterpreter userInterpreter;
+    userInterpreter.lookbackTime = 0.2;
+    userInterpreter.init(&robot); 
+    userInterpreter.publish_frequency = publish_frequency;
+
     //Start running loop
-    ros::Rate loop_rate(0.5);
+    ros::Rate loop_rate(publish_frequency);
     while (ros::ok()) {
-        robot.setPoseTargets();
-        robot.move_group_p->asyncMove();
+        userInterpreter.PushBackData();
+        if(userInterpreter.Analyze())
+        {
+            robot.setPoseTargets();
+            robot.move_group_p->move();
+        }
         ros::spinOnce();
         loop_rate.sleep();
     }

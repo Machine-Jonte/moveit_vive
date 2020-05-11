@@ -25,10 +25,38 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include "ros/ros.h"
 
-class UserInterpreter{
-    std::vector<geometry_msgs::PoseStamped> userTarget;
+#include "robotarm.h"
 
-    int analyze();
+class UserInterpreter;
+
+class DataArmHolder {
+    public:
+        std::vector<geometry_msgs::PoseStamped> userTargets;
+        std::vector<geometry_msgs::PoseStamped> robotPoses;
+        geometry_msgs::PoseStamped poseMovingTo;
+
+        UserInterpreter *parent;
+
+        int Analyze();
+
+};
+class UserInterpreter{
+    public:
+        double publish_frequency;
+        double VR_steadyError = 0.01;
+        double robot_steadyError = 0.001;
+        double target_error = 0.01;
+        double lookbackTime = 1;
+        int lookBackMaxSizeVector = 1000;
+
+        DataArmHolder right;
+        DataArmHolder left;
+
+        Robot *robot_p; 
+
+        int Analyze();
+        void init(Robot *robot_p);
+        void PushBackData();
 
 };
 

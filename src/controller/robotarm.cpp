@@ -68,7 +68,8 @@ void RobotArm::ProcessPose()
     if(!(this->controllerState.trigger > 0.99))
     {
         this->controllerState.startedTrackingPose = this->controllerState.pose;
-        this->startedTrackingPose = this->fullRobot->move_group_p->getCurrentPose(this->endLinkName);
+        this->currentArmPose = this->fullRobot->move_group_p->getCurrentPose(this->endLinkName);
+        this->startedTrackingPose = this->currentArmPose; 
     }
 
     geometry_msgs::PoseStamped poseStamped = this->controllerState.pose;
