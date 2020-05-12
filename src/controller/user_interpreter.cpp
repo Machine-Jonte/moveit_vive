@@ -34,12 +34,12 @@ double euclideanDistancePose(geometry_msgs::Pose pose1, geometry_msgs::Pose pose
 int DataArmHolder::Analyze()
 {
     int lookBackIndex = this->parent->publish_frequency * this->parent->lookbackTime;
-    std::cout << "Look back index: " << lookBackIndex << std::endl;
-    std::cout << "Size: " << this->userTargets.size() << std::endl;
+    // std::cout << "Look back index: " << lookBackIndex << std::endl;
+    // std::cout << "Size: " << this->userTargets.size() << std::endl;
 
     if(this->userTargets.size() > lookBackIndex) {
        double controllerDeltaMovement = euclideanDistancePose( (this->userTargets.rbegin() + lookBackIndex)->pose, this->userTargets.back().pose); 
-        std::cout << "Distance: " << controllerDeltaMovement << std::endl;
+        // std::cout << "Distance: " << controllerDeltaMovement << std::endl;
 
         // If controller hasn't moved during the given time span
         // move to next phase if it should update pose or not
@@ -48,7 +48,7 @@ int DataArmHolder::Analyze()
        if(controllerDeltaMovement < this->parent->VR_steadyError)
        {
             double controllerRobotDeviation = euclideanDistancePose(this->userTargets.back().pose, this->robotPoses.back().pose);
-            std::cout << "controllerRobotDeviation: " << controllerRobotDeviation << std::endl;
+            // std::cout << "controllerRobotDeviation: " << controllerRobotDeviation << std::endl;
 
             // The robot shall only move if the controller
             // isn't at the same position as the end effector
@@ -58,7 +58,7 @@ int DataArmHolder::Analyze()
                 if(targetError > this->parent->target_error)
                 {
                     this->poseMovingTo = this->userTargets.back();
-                    std::cout << "Returning 1: " << std::endl;
+                    // std::cout << "Returning 1: " << std::endl;
                     return 1;
                 } 
             }

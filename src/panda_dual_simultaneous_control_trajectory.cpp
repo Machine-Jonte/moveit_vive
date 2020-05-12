@@ -44,7 +44,7 @@ ros::Publisher pub_right;
 // ros::Publisher pub_left_controller;
 // geometry_msgs::Pose currentPose;
 bool online_tracking;
-bool trajectory = false;
+bool trajectory = true;
 
 PublishHandlerRobotState robotPublisher;
 

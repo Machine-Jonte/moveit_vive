@@ -24,6 +24,8 @@
 // MoveIt and ROS
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_msgs/Constraints.h>
+#include <moveit_msgs/PositionConstraint.h>
 #include "ros/ros.h"
 
 
@@ -39,7 +41,7 @@ class ControllerState {
         int menu = 0;
         int grip = 0;
 
-        // Related to ProcessPose()
+        // Related to processPose()
         geometry_msgs::PoseStamped startedTrackingPose;
 };
 
@@ -50,6 +52,7 @@ class DataFlowManager {
         ros::Subscriber sub_menu;
         ros::Subscriber sub_grip;
         ros::Publisher  pub_processed;
+        ros::Publisher  pub_currentPose;
 
         void init(std::string controllerName, ros::NodeHandle &node_handle, RobotArm *robotArm_p);
 };
@@ -62,19 +65,21 @@ class RobotArm {
         geometry_msgs::PoseStamped targetPose;
         geometry_msgs::PoseStamped startedTrackingPose;
         geometry_msgs::PoseStamped currentArmPose;
-        moveit::planning_interface::MoveGroupInterface *move_group_p;
         
         Robot *fullRobot;
 
         void init(ros::NodeHandle &node_handle, std::string endLinkName, std::string controllerName);
 
-        void ProcessPose();
+        void processPose();
 
-        void VR_PoseControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);      
-        void VR_TriggerCallback(const std_msgs::Float32::ConstPtr& msg);
-        void VR_MenuCallback(const std_msgs::Int32::ConstPtr& msg);
-        void GripCallback(const std_msgs::Int32::ConstPtr& msg);
+        void VR_poseControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);      
+        void VR_triggerCallback(const std_msgs::Float32::ConstPtr& msg);
+        void VR_menuCallback(const std_msgs::Int32::ConstPtr& msg);
+        void gripCallback(const std_msgs::Int32::ConstPtr& msg);
+        moveit_msgs::PositionConstraint createConstraint();
 
+    private:
+        moveit_msgs::BoundingVolume createBoundingVolume(std::vector<double> size, geometry_msgs::Pose boundingBoxPose);
 };
 
 class Robot {
@@ -84,6 +89,7 @@ class Robot {
         moveit::planning_interface::MoveGroupInterface *move_group_p;
 
         void setPoseTargets();
+        void setPathConstraints();
 
         Robot();
 
