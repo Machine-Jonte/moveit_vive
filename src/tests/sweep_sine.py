@@ -9,7 +9,7 @@ from math import sin, radians, pi
 import csv
 
 from geometry_msgs.msg import Pose, PoseStamped
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, Float32
 
 class SweepSine:
     def __init__(self, lower_freq, upper_freq, period_time):
@@ -27,8 +27,8 @@ if __name__ == "__main__":
     pub_pose = [rospy.Publisher("/vive/controller/left/pose", PoseStamped, queue_size=1),
                 rospy.Publisher("/vive/controller/right/pose", PoseStamped, queue_size=1) ]
 
-    pub_menu = [rospy.Publisher("/vive/controller/left/buttons/menu", Int32, queue_size=1), 
-                rospy.Publisher("/vive/controller/right/buttons/menu", Int32, queue_size=1)]
+    pub_enabler = [rospy.Publisher("/vive/controller/left/trigger", Float32, queue_size=1), 
+                   rospy.Publisher("/vive/controller/right/trigger", Float32, queue_size=1)]
 
     poses = [PoseStamped(), PoseStamped()]
 
@@ -48,12 +48,12 @@ if __name__ == "__main__":
                 pose.pose.position.z = 0
 
             for i, pub in enumerate(pub_pose):
-                pub_menu[i].publish(0)
+                pub_enabler[i].publish(0)
                 pub.publish(poses[i])
         else:
 
             
-            for pub in pub_menu:
+            for pub in pub_enabler:
                 pub.publish(1)
             
             for i, pub in enumerate(pub_pose):

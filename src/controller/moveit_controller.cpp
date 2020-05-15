@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
     
     // Addition initialization
     move_group.setPlanningTime(2.0);
+    // move_group.setPlanningTime(20.0);
     // move_group.setGoalOrientationTolerance(0.01);
     // move_group.setGoalPositionTolerance(0.01);
 
@@ -89,9 +90,10 @@ int main(int argc, char *argv[])
         if(userInterpreter.Analyze())
         {
             // robot.setPathConstraints();
+            // robot.setJointConstraints();
             robot.setPoseTargets();
             robot.move_group_p->move();
-            robot.move_group_p->clearPathConstraints();
+            // robot.move_group_p->clearPathConstraints();
         }
         ros::spinOnce();
         loop_rate.sleep();

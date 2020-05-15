@@ -26,6 +26,7 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit_msgs/Constraints.h>
 #include <moveit_msgs/PositionConstraint.h>
+#include <moveit_msgs/JointConstraint.h>
 #include "ros/ros.h"
 
 
@@ -66,11 +67,14 @@ class RobotArm {
         geometry_msgs::PoseStamped startedTrackingPose;
         geometry_msgs::PoseStamped currentArmPose;
         
+        bool orientationLock = false;
         Robot *fullRobot;
 
         void init(ros::NodeHandle &node_handle, std::string endLinkName, std::string controllerName);
 
         void processPose();
+        void processOrientation(geometry_msgs::PoseStamped &poseStamped);
+        void processPosition(geometry_msgs::PoseStamped &poseStamped);
 
         void VR_poseControllerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);      
         void VR_triggerCallback(const std_msgs::Float32::ConstPtr& msg);
@@ -90,6 +94,7 @@ class Robot {
 
         void setPoseTargets();
         void setPathConstraints();
+        void setJointConstraints();
 
         Robot();
 

@@ -6,6 +6,13 @@
 // please consider refering to it. 
 
 #include "robotarm.h"
+#include "geometry_msgs/Vector3.h"
+#include <iostream>     // std::cout
+#include <algorithm>    // std::for_each
+#include <vector>       // std::vector
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 
 // If you are not using my VR publisher, please change these lines
 // to match your publisher
@@ -43,20 +50,39 @@ void RobotArm::init(ros::NodeHandle &node_handle, std::string endLinkName, std::
 void Robot::setPoseTargets()
 {
     this->move_group_p->clearPoseTargets();
+    this->move_group_p->setStartStateToCurrentState();
     this->move_group_p->setPoseTarget(this->right.targetPose.pose, this->right.endLinkName);
     this->move_group_p->setPoseTarget(this->left.targetPose.pose, this->left.endLinkName);
 }
 
-void Robot::setPathConstraints()
+
+void printVector (std::string string) {  // function:
+  std::cout << string << std::endl;
+}
+
+void Robot::setJointConstraints()
 {
-    std::cout << "Entering here" << std::endl;
+    moveit_msgs::JointConstraint jointConstraint;
+    std::vector<std::string> jointNames = this->move_group_p->getJointNames();
+    std::vector<double> jointValues = this->move_group_p->getCurrentJointValues();
+    std::vector<moveit_msgs::JointConstraint> jointConstraints;
+    std::cout << jointNames.size() << " ::: " << jointValues.size() << std::endl;
+    for(int i = 0; i < jointNames.size(); i++)
+    {
+        moveit_msgs::JointConstraint current;
+        current.joint_name = jointNames[i];
+        current.position = jointValues[i];
+        current.tolerance_above = 100;
+        current.tolerance_below = 100;
+        jointConstraints.push_back(current);
+    }
     moveit_msgs::Constraints constraints;
-    moveit_msgs::PositionConstraint right = this->right.createConstraint();
-    moveit_msgs::PositionConstraint left = this->left.createConstraint();
-    constraints.position_constraints.push_back(right);
-    constraints.position_constraints.push_back(left);
+    constraints.joint_constraints = jointConstraints;
+    constraints.name = "joint_constraints";
     this->move_group_p->setPathConstraints(constraints);
-    // this->move_group_p->setPathConstraints(left);
+    moveit_msgs::Constraints test = this->move_group_p->getPathConstraints();
+    std::cout << test.name << std::endl;
+    // for_each(jointNames.begin(), jointNames.end(), printVector); 
 }
 
 
@@ -78,8 +104,39 @@ void subtractPose(geometry_msgs::Pose &pose, geometry_msgs::Pose startingPose)
     pose.position.z -= startingPose.position.z;
 }
 
+void RobotArm::processOrientation(geometry_msgs::PoseStamped &poseStamped)
+{
+    tf2::Quaternion q_processed, q_robot, q_controller, q_relative, q_startedTracking, q_controllerStartedTracking;
+
+    // Load data to quaternions for easier manipulation
+    tf2::fromMsg(this->currentArmPose.pose.orientation, q_robot);
+    tf2::fromMsg(this->controllerState.pose.pose.orientation, q_controller);
+    tf2::fromMsg(this->startedTrackingPose.pose.orientation, q_startedTracking);
+    tf2::fromMsg(this->controllerState.startedTrackingPose.pose.orientation, q_controllerStartedTracking);
+
+    // Calculate the difference in orientation 
+    // after the trigger is pressed
+    // q_relative = q_startedTracking * q_controller.inverse();
+    q_relative = q_controllerStartedTracking * q_controller.inverse();
+
+    if(orientationLock){
+        q_processed = q_robot;
+    } else {
+        q_processed = q_relative.inverse() * q_robot;
+    }
+    tf2::convert(q_processed, poseStamped.pose.orientation);
+}
+
+void RobotArm::processPosition(geometry_msgs::PoseStamped &poseStamped)
+{
+    subtractPose(poseStamped.pose, this->controllerState.startedTrackingPose.pose);
+    addPose(poseStamped.pose, this->startedTrackingPose.pose);
+}
+
 void RobotArm::processPose()
 {
+    // If the controller is not pressed
+    // make the processed robot posed locke to robot pose
     if(!(this->controllerState.trigger > 0.99))
     {
         this->controllerState.startedTrackingPose = this->controllerState.pose;
@@ -88,9 +145,9 @@ void RobotArm::processPose()
     }
 
     geometry_msgs::PoseStamped poseStamped = this->controllerState.pose;
-    subtractPose(poseStamped.pose, this->controllerState.startedTrackingPose.pose);
-    addPose(poseStamped.pose, this->startedTrackingPose.pose);
     poseStamped.header.stamp = ros::Time::now();
+    this->processPosition(poseStamped);
+    this->processOrientation(poseStamped);
     this->targetPose = poseStamped;
 }
 
@@ -113,6 +170,9 @@ void RobotArm::VR_triggerCallback(const std_msgs::Float32::ConstPtr& msg)
 void RobotArm::VR_menuCallback(const std_msgs::Int32::ConstPtr& msg)
 {
     this->controllerState.menu = msg->data;
+    if(msg->data){
+        this->orientationLock = !this->orientationLock;
+    }
 }
 
 void RobotArm::gripCallback(const std_msgs::Int32::ConstPtr& msg)
@@ -124,6 +184,21 @@ void RobotArm::gripCallback(const std_msgs::Int32::ConstPtr& msg)
     }
 }
 
+
+
+// Constraints
+void Robot::setPathConstraints()
+{
+    moveit_msgs::Constraints constraints;
+    
+    moveit_msgs::PositionConstraint right = this->right.createConstraint();
+    moveit_msgs::PositionConstraint left = this->left.createConstraint();
+
+    constraints.position_constraints.push_back(right);
+    constraints.position_constraints.push_back(left);
+    this->move_group_p->setPathConstraints(constraints);
+}
+
 moveit_msgs::PositionConstraint RobotArm::createConstraint()
 {
     geometry_msgs::Pose fromPose, toPose;
@@ -131,22 +206,28 @@ moveit_msgs::PositionConstraint RobotArm::createConstraint()
     toPose = this->targetPose.pose;
 
     moveit_msgs::PositionConstraint positionConstraint;
+    positionConstraint.header.frame_id = this->endLinkName;
     positionConstraint.link_name = this->endLinkName;
     positionConstraint.weight = 1.0;
+    // positionConstraint.header.frame_id = this->fullRobot->move_group_p->getPlanningFrame();
 
     // c and k can be used to allow bigger planning area
     // for the robot
-    double c = 1.0;
-    double k = 0.1;
+    double c = 2.0;
+    double k = 0.3;
     double dx = ( ( abs(toPose.position.x - fromPose.position.x) ) + k ) * c;
     double dy = ( ( abs(toPose.position.y - fromPose.position.y) ) + k ) * c;
     double dz = ( ( abs(toPose.position.z - fromPose.position.z) ) + k ) * c;
+    // double dx, dy, dz;
+    // dx = 0.5;
+    // dy = 0.5;
+    // dz = 0.5;
 
     geometry_msgs::Pose averagePose;
     averagePose.orientation.w = 1.0;
-    averagePose.position.x = 0.0;
-    averagePose.position.y = 0.0;
-    averagePose.position.z = 0.0;
+    averagePose.position.x = (toPose.position.x - fromPose.position.x)/2;
+    averagePose.position.y = (toPose.position.y - fromPose.position.y)/2;
+    averagePose.position.z = (toPose.position.z - fromPose.position.z)/2;
     // averagePose.position.x = (toPose.position.x + fromPose.position.x)/2.0;
     // averagePose.position.y = (toPose.position.y + fromPose.position.y)/2.0;
     // averagePose.position.z = (toPose.position.z + fromPose.position.z)/2.0;
@@ -156,9 +237,11 @@ moveit_msgs::PositionConstraint RobotArm::createConstraint()
     moveit_msgs::BoundingVolume boundingVolume = this->createBoundingVolume({dx,dy,dz}, averagePose);
     
     positionConstraint.constraint_region = boundingVolume;
-    positionConstraint.header.frame_id = this->endLinkName;
-    // std::cout << this->fullRobot->move_group_p->getPlanningFrame() << std::endl;
-    // positionConstraint.header.frame_id = this->fullRobot->move_group_p->getPlanningFrame();
+    geometry_msgs::Vector3 vector;
+    vector.x = toPose.position.x - fromPose.position.x;
+    vector.y = toPose.position.y - fromPose.position.y; 
+    vector.z = toPose.position.z - fromPose.position.z;
+    positionConstraint.target_point_offset = vector;
 
     return positionConstraint;
 }
@@ -176,14 +259,16 @@ moveit_msgs::BoundingVolume RobotArm::createBoundingVolume(std::vector<double> s
 
     /* A pose for the box (specified relative to frame_id) */
     geometry_msgs::Pose box_pose;
-    box_pose.orientation.w = 1.0;
+    box_pose.orientation.w = boundingBoxPose.orientation.w;
+    box_pose.orientation.x = boundingBoxPose.orientation.x;
+    box_pose.orientation.y = boundingBoxPose.orientation.y;
+    box_pose.orientation.z = boundingBoxPose.orientation.z;
     box_pose.position.x = boundingBoxPose.position.x;
     box_pose.position.y = boundingBoxPose.position.y;
     box_pose.position.z = boundingBoxPose.position.z;
 
     boundingVolume.primitives.push_back(primitive);
     boundingVolume.primitive_poses.push_back(box_pose);
-    // boundingVolume.operation = boundingVolume.ADD;
 
 
     return boundingVolume;
