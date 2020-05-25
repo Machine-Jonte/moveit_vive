@@ -120,7 +120,9 @@ void RobotArm::processOrientation(geometry_msgs::PoseStamped &poseStamped)
     q_relative = q_controllerStartedTracking * q_controller.inverse();
 
     if(orientationLock){
-        q_processed = q_robot;
+        tf2::Quaternion q_orientationLock;
+        tf2::fromMsg(this->orientationLockPose.orientation, q_orientationLock);
+        q_processed = q_orientationLock;
     } else {
         q_processed = q_relative.inverse() * q_robot;
     }
@@ -171,8 +173,18 @@ void RobotArm::VR_menuCallback(const std_msgs::Int32::ConstPtr& msg)
 {
     this->controllerState.menu = msg->data;
     if(msg->data){
-        this->orientationLock = !this->orientationLock;
-    }
+        this->menuStreak++;
+        if(menuStreak > 20)
+        {
+            this->orientationLock = !this->orientationLock;
+            if(this->orientationLock)
+            {
+                this->orientationLockPose = this->fullRobot->move_group_p->getCurrentPose(this->endLinkName).pose;
+            }
+            printf("Orientation Lock %i\n", this->orientationLock);
+            menuStreak = 0;
+        }
+    } else {menuStreak = 0;}
 }
 
 void RobotArm::gripCallback(const std_msgs::Int32::ConstPtr& msg)

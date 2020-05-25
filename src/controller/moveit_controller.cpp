@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 
     
     // Addition initialization
-    move_group.setPlanningTime(2.0);
+    // move_group.setPlanningTime(2.0);
     // move_group.setPlanningTime(20.0);
     // move_group.setGoalOrientationTolerance(0.01);
     // move_group.setGoalPositionTolerance(0.01);
@@ -86,15 +86,21 @@ int main(int argc, char *argv[])
     //Start running loop
     ros::Rate loop_rate(publish_frequency);
     while (ros::ok()) {
-        userInterpreter.PushBackData();
-        if(userInterpreter.Analyze())
-        {
+        // userInterpreter.PushBackData();
+        // if(userInterpreter.Analyze())
+        // {
             // robot.setPathConstraints();
             // robot.setJointConstraints();
-            robot.setPoseTargets();
-            robot.move_group_p->move();
-            // robot.move_group_p->clearPathConstraints();
-        }
+            if(robot.left.controllerState.trigger > 0.99 || robot.right.controllerState.trigger > 0.99)
+            {
+                if(!robot.left.controllerState.grip && !robot.right.controllerState.grip)
+                {
+                    robot.setPoseTargets();
+                    robot.move_group_p->move();
+                    // robot.move_group_p->clearPathConstraints();
+                }
+            }
+        // }
         ros::spinOnce();
         loop_rate.sleep();
     }

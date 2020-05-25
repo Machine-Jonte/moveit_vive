@@ -66,8 +66,10 @@ class RobotArm {
         geometry_msgs::PoseStamped targetPose;
         geometry_msgs::PoseStamped startedTrackingPose;
         geometry_msgs::PoseStamped currentArmPose;
+        geometry_msgs::Pose orientationLockPose;
         
         bool orientationLock = false;
+        int menuStreak = 0;
         Robot *fullRobot;
 
         void init(ros::NodeHandle &node_handle, std::string endLinkName, std::string controllerName);
