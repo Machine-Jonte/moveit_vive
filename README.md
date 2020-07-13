@@ -37,7 +37,7 @@ In order to control the gripper, the script gripper_control.py can be executed.
 
 
 ## Cartesian Path Planning
-As Cartesian path planning apeard to be not as good, the code was not rewritten for that case. The concept (in the bad code located in LEGACY) can be found in the files: "panda_dual_\<...\>.cpp".
+As Cartesian path planning appeared to be not as good, the code was not rewritten for that case. The concept (in the bad code located in LEGACY) can be found in the files: "panda_dual_\<...\>.cpp".
 
 
 
