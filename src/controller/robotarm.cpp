@@ -18,12 +18,6 @@
 // to match your publisher
 void DataFlowManager::init(std::string controllerName, ros::NodeHandle &node_handle, RobotArm *robotArm_p)
 {
-    // REMOVE IF WORK
-    // std::string sub_pose_string = "/vive/controller/" + controllerName + "/pose";
-    // char sub_pose_char[sub_pose_string.length() +1];
-    // strcpy(sub_pose_char, sub_pose_string.c_str()); 
-    // END REMOVE IF WORK
-
     this->sub_pose      = node_handle.subscribe("/vive/controller/" + controllerName + "/pose", 1,         &RobotArm::VR_poseControllerCallback, robotArm_p);
     this->sub_trigger   = node_handle.subscribe("/vive/controller/" + controllerName + "/trigger", 1,      &RobotArm::VR_triggerCallback,        robotArm_p);
     this->sub_menu      = node_handle.subscribe("/vive/controller/" + controllerName + "/buttons/menu", 1, &RobotArm::VR_menuCallback,           robotArm_p);
@@ -56,7 +50,7 @@ void Robot::setPoseTargets()
 }
 
 
-void printVector (std::string string) {  // function:
+void printVector (std::string string) {
   std::cout << string << std::endl;
 }
 
@@ -196,8 +190,6 @@ void RobotArm::gripCallback(const std_msgs::Int32::ConstPtr& msg)
     }
 }
 
-
-
 // Constraints
 void Robot::setPathConstraints()
 {
@@ -211,6 +203,8 @@ void Robot::setPathConstraints()
     this->move_group_p->setPathConstraints(constraints);
 }
 
+
+// Not working --- terminated development ---
 moveit_msgs::PositionConstraint RobotArm::createConstraint()
 {
     geometry_msgs::Pose fromPose, toPose;
@@ -257,7 +251,8 @@ moveit_msgs::PositionConstraint RobotArm::createConstraint()
 
     return positionConstraint;
 }
- 
+
+// Not working --- terminated development ---
 moveit_msgs::BoundingVolume RobotArm::createBoundingVolume(std::vector<double> size, geometry_msgs::Pose boundingBoxPose)
 {
     moveit_msgs::BoundingVolume boundingVolume;

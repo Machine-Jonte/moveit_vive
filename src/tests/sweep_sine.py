@@ -4,7 +4,7 @@ A simple script that sends fake controller position and orientation.
 This is used to investigate system properties.
 """
 import rospy
-import numpy
+import numpy as np
 from math import sin, radians, pi
 import csv
 
@@ -18,7 +18,16 @@ class SweepSine:
         self.T = period_time
     
     def calc(self,t):
-        return sin(2*pi* (self.f0*t+(self.f1-self.f0)/(2*self.T)*pow(t,2)))
+        # Linear sweep sine
+        return sin(2*pi* (self.f0*t+(self.f1-self.f0)/(self.T)*pow(t,2)))
+
+        # Exponential sweep sine
+        # return sin(2*pi*self._freq(t) * t)
+
+    def _freq(self, t):
+        f0 = 0.0
+        f1 = 10.0
+        return (self.T*((pow(f1/(f0+0.1),t/self.T)-1)/np.log(f1/(f0+0.1)))/t-1)/2.0
  
 
 if __name__ == "__main__":
@@ -32,7 +41,8 @@ if __name__ == "__main__":
 
     poses = [PoseStamped(), PoseStamped()]
 
-    sweepsine = SweepSine(0.00001, 1, 500.0)
+    max_time = 400.0
+    sweepsine = SweepSine(0, 0.5, max_time)
     freq = 100.0
     rate = rospy.Rate(freq)
     rounds = 0
@@ -61,6 +71,9 @@ if __name__ == "__main__":
                 poses[i].pose.position.y = sweepsine.calc(t) / 5            
                 pub.publish(poses[i])
 
-            print("Pose y:", poses[0].pose.position.y)
+            # print("Pose y:", poses[0].pose.position.y)
+        print("Elapsed Time:" , t)
         t += 1.0/freq
+        if t > max_time:
+            exit()
         rate.sleep()

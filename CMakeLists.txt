@@ -52,22 +52,22 @@ include_directories(
 )
 
 
-add_executable(vive_moveit_jointConstraints src/vive_moveit_jointConstraints.cpp)
+add_executable(vive_moveit_jointConstraints src/LEGACY/vive_moveit_jointConstraints.cpp)
 target_link_libraries(vive_moveit_jointConstraints ${catkin_LIBRARIES})
 
 # add_dependencies(vive_moveit_jointConstraints moveit_vive)
 
-add_executable(panda_dual_control src/panda_dual_control.cpp)
+add_executable(panda_dual_control src/LEGACY/panda_dual_control.cpp)
 target_link_libraries(panda_dual_control ${catkin_LIBRARIES})
 # add_dependencies(panda_dual_control moveit_vive)
 
-add_executable(panda_dual_simultaneous_control src/panda_dual_simultaneous_control.cpp)
+add_executable(panda_dual_simultaneous_control src/LEGACY/panda_dual_simultaneous_control.cpp)
 target_link_libraries(panda_dual_simultaneous_control ${catkin_LIBRARIES})
 # add_dependencies(panda_dual_simultaneous_control moveit_vive)
 
 add_executable(panda_dual_simultaneous_control_trajectory
-  src/panda_dual_simultaneous_control_trajectory.cpp
-  src/moveit_workspace.cpp
+  src/LEGACY/panda_dual_simultaneous_control_trajectory.cpp
+  src/LEGACY/moveit_workspace.cpp
 )
 
 target_link_libraries(
