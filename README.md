@@ -5,6 +5,10 @@ The VR control system is presented in the MCs thesis (link soon to arrive) and c
 ### Overview
 This package is used to control MoveIt move groups with HTC Vive. It is built primarily for bimanual robotics systems, but can easily be transferred for one-armed robots.  The system is tested in simulation using the ROS packages [panda_dual_gazebo](https://github.com/Machine-Jonte/panda_dual_gazebo) and [panda_dual_gazebo_moveit_config](https://github.com/Machine-Jonte/panda_dual_gazebo_moveit_config)
 
+<p align="center">
+  <img src="./GIFs/demo.gif" title="Simple demo." width="800">
+</p>
+
 ## How to use
 To read the VR controller data please use the package [vive_ros (modified)](https://github.com/robosavvy/vive_ros). Note, the vive_ros package in my repository is a modified version of [vive_ros](https://github.com/robosavvy/vive_ros). For a simple launch file of how to start the system, look at [controller.launch](./launch/controller.launch).
 
