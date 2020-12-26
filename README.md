@@ -2,6 +2,9 @@
 ### Preleminary
 The VR control system is presented in the [MCs thesis](https://www.diva-portal.org/smash/get/diva2:1473629/FULLTEXT01.pdf) and consider refering the thesis if you found this work useful.
 
+### Requirements
+[MoveIt installed from source](https://moveit.ros.org/install/source/). It has been tested for Melodic and Noetic.
+
 ### Overview
 This package is used to control MoveIt move groups with HTC Vive. It is built primarily for bimanual robotics systems, but can easily be transferred for one-armed robots.  The system is tested in simulation using the ROS packages [panda_dual_gazebo](https://github.com/Machine-Jonte/panda_dual_gazebo) and [panda_dual_gazebo_moveit_config](https://github.com/Machine-Jonte/panda_dual_gazebo_moveit_config)
 
