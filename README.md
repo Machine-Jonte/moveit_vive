@@ -10,7 +10,7 @@ This package is used to control MoveIt move groups with HTC Vive. It is built pr
 </p>
 
 ## How to use
-To read the VR controller data please use the package [vive_ros (modified)](https://github.com/robosavvy/vive_ros). Note, the vive_ros package in my repository is a modified version of [vive_ros](https://github.com/robosavvy/vive_ros). For a simple launch file of how to start the system, look at [controller.launch](./launch/controller.launch).
+To read the VR controller data please use the package [vive_ros (modified)](https://github.com/machine-jonte/vive_ros). Note, the vive_ros package in my repository is a modified version of [vive_ros](https://github.com/robosavvy/vive_ros). For a simple launch file of how to start the system, look at [controller.launch](./launch/controller.launch).
 
 To use the package run:
 ``` xml
