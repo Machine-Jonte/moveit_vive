@@ -6,21 +6,44 @@
 
   <node name="vive_pose" pkg="vive_ros" type="vive_pose"/>
 
-  <node name="moveit_controller" pkg="moveit_vive" type="moveit_controller" output="screen">
+  <!-- <node name="moveit_controller" pkg="moveit_vive" type="moveit_controller" output="screen"> -->
   <!-- To alter this package to fit your robot, add parameters here -->
+  <!-- </node> -->
+
+  <!-- TWO ARM EXAMPLE -->
+  <!-- To alter this package to fit your robot, add parameters here -->
+  <!-- If you use only one arm specify only the right arm and set number of arms to 1 -->
+  <node name="moveit_controller" pkg="moveit_vive" type="moveit_controller" output="screen">
+    <param name="right_controller_name" type="str" value="right"/>
+    <param name="left_controller_name" type="str" value="left"/>
+    <param name="robot_planning_group" type="str" value="dual"/>
+    <param name="right_end_link_name" type="str" value="panda_1_link8"/>
+    <param name="left_end_link_name" type="str" value="panda_2_link8"/>
+    <param name="number_of_arms" type="int" value="2"/>  
   </node>
 
+    <!-- To alter this package to fit your robot, add parameters here -->
+  <!-- ONE ARM EXAMPLE -->
+  <!-- USE RIGHT -->
+  <!-- <node name="moveit_controller" pkg="moveit_vive" type="moveit_controller" output="screen">
+    <param name="right_controller_name" type="str" value="right"/>
+    <param name="robot_planning_group" type="str" value="dual"/>
+    <param name="right_end_link_name" type="str" value="panda_1_link8"/>
+    <param name="number_of_arms" type="int" value="1"/>  
+  </node> -->
 
-<!-- The gripper is made in a very simple manner and should be considered to be improved if to used -->
-  <node name="panda_right_gripper" pkg="moveit_vive" type="gripper_control.py">
+
+  <!-- GRIPPERS -->
+  <!-- The gripper is made in a very simple manner and should be considered to be improved if to used -->
+  <!-- <node name="panda_right_gripper" pkg="moveit_vive" type="gripper_control.py"> -->
     <!-- <param name="arm_id" type="str" value="panda2"/> -->
-    <param name="controller_id" type="str" value="right"/>
-  </node>
+    <!-- <param name="controller_id" type="str" value="right"/> -->
+  <!-- </node> -->
 
-  <node name="panda_left_gripper" pkg="moveit_vive" type="gripper_control.py">
+  <!-- <node name="panda_left_gripper" pkg="moveit_vive" type="gripper_control.py"> -->
     <!-- <param name="arm_id" type="str" value="panda2"/> -->
-    <param name="controller_id" type="str" value="left"/>
-  </node>
+    <!-- <param name="controller_id" type="str" value="left"/> -->
+  <!-- </node> -->
 
 
 </launch>

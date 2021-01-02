@@ -29,10 +29,13 @@ void DataFlowManager::init(std::string controllerName, ros::NodeHandle &node_han
     this->pub_currentPose = node_handle.advertise<geometry_msgs::PoseStamped>("/robot/" + controllerName + "/currentPose", 1);
 }
 
-Robot::Robot()
+Robot::Robot(int nr_arms)
 {
-    this->right.fullRobot = this;
-    this->left.fullRobot = this;
+    for(int i = 0; i < nr_arms; i++)
+    {
+        this->robotArms.push_back(RobotArm());
+        this->robotArms.back().fullRobot = this;
+    }
 }
 
 void RobotArm::init(ros::NodeHandle &node_handle, std::string endLinkName, std::string controllerName) 
@@ -45,8 +48,10 @@ void Robot::setPoseTargets()
 {
     this->move_group_p->clearPoseTargets();
     this->move_group_p->setStartStateToCurrentState();
-    this->move_group_p->setPoseTarget(this->right.targetPose.pose, this->right.endLinkName);
-    this->move_group_p->setPoseTarget(this->left.targetPose.pose, this->left.endLinkName);
+    for(int i = 0; i < this->robotArms.size(); i++)
+    {
+     this->move_group_p->setPoseTarget(this->robotArms[i].targetPose.pose, this->robotArms[i].endLinkName);   
+    }
 }
 
 
@@ -76,7 +81,6 @@ void Robot::setJointConstraints()
     this->move_group_p->setPathConstraints(constraints);
     moveit_msgs::Constraints test = this->move_group_p->getPathConstraints();
     std::cout << test.name << std::endl;
-    // for_each(jointNames.begin(), jointNames.end(), printVector); 
 }
 
 
@@ -188,95 +192,4 @@ void RobotArm::gripCallback(const std_msgs::Int32::ConstPtr& msg)
     {
         this->fullRobot->move_group_p->stop();
     }
-}
-
-// Constraints
-void Robot::setPathConstraints()
-{
-    moveit_msgs::Constraints constraints;
-    
-    moveit_msgs::PositionConstraint right = this->right.createConstraint();
-    moveit_msgs::PositionConstraint left = this->left.createConstraint();
-
-    constraints.position_constraints.push_back(right);
-    constraints.position_constraints.push_back(left);
-    this->move_group_p->setPathConstraints(constraints);
-}
-
-
-// Not working --- terminated development ---
-moveit_msgs::PositionConstraint RobotArm::createConstraint()
-{
-    geometry_msgs::Pose fromPose, toPose;
-    fromPose = this->currentArmPose.pose;
-    toPose = this->targetPose.pose;
-
-    moveit_msgs::PositionConstraint positionConstraint;
-    positionConstraint.header.frame_id = this->endLinkName;
-    positionConstraint.link_name = this->endLinkName;
-    positionConstraint.weight = 1.0;
-    // positionConstraint.header.frame_id = this->fullRobot->move_group_p->getPlanningFrame();
-
-    // c and k can be used to allow bigger planning area
-    // for the robot
-    double c = 2.0;
-    double k = 0.3;
-    double dx = ( ( abs(toPose.position.x - fromPose.position.x) ) + k ) * c;
-    double dy = ( ( abs(toPose.position.y - fromPose.position.y) ) + k ) * c;
-    double dz = ( ( abs(toPose.position.z - fromPose.position.z) ) + k ) * c;
-    // double dx, dy, dz;
-    // dx = 0.5;
-    // dy = 0.5;
-    // dz = 0.5;
-
-    geometry_msgs::Pose averagePose;
-    averagePose.orientation.w = 1.0;
-    averagePose.position.x = (toPose.position.x - fromPose.position.x)/2;
-    averagePose.position.y = (toPose.position.y - fromPose.position.y)/2;
-    averagePose.position.z = (toPose.position.z - fromPose.position.z)/2;
-    // averagePose.position.x = (toPose.position.x + fromPose.position.x)/2.0;
-    // averagePose.position.y = (toPose.position.y + fromPose.position.y)/2.0;
-    // averagePose.position.z = (toPose.position.z + fromPose.position.z)/2.0;
-
-
-
-    moveit_msgs::BoundingVolume boundingVolume = this->createBoundingVolume({dx,dy,dz}, averagePose);
-    
-    positionConstraint.constraint_region = boundingVolume;
-    geometry_msgs::Vector3 vector;
-    vector.x = toPose.position.x - fromPose.position.x;
-    vector.y = toPose.position.y - fromPose.position.y; 
-    vector.z = toPose.position.z - fromPose.position.z;
-    positionConstraint.target_point_offset = vector;
-
-    return positionConstraint;
-}
-
-// Not working --- terminated development ---
-moveit_msgs::BoundingVolume RobotArm::createBoundingVolume(std::vector<double> size, geometry_msgs::Pose boundingBoxPose)
-{
-    moveit_msgs::BoundingVolume boundingVolume;
-
-    shape_msgs::SolidPrimitive primitive;
-    primitive.type = primitive.BOX;
-    primitive.dimensions.resize(3);
-    primitive.dimensions[0] = size[0]; // x
-    primitive.dimensions[1] = size[1]; // y
-    primitive.dimensions[2] = size[2]; // z
-
-    /* A pose for the box (specified relative to frame_id) */
-    geometry_msgs::Pose box_pose;
-    box_pose.orientation.w = boundingBoxPose.orientation.w;
-    box_pose.orientation.x = boundingBoxPose.orientation.x;
-    box_pose.orientation.y = boundingBoxPose.orientation.y;
-    box_pose.orientation.z = boundingBoxPose.orientation.z;
-    box_pose.position.x = boundingBoxPose.position.x;
-    box_pose.position.y = boundingBoxPose.position.y;
-    box_pose.position.z = boundingBoxPose.position.z;
-
-    boundingVolume.primitives.push_back(primitive);
-    boundingVolume.primitive_poses.push_back(box_pose);
-
-
-    return boundingVolume;
 }

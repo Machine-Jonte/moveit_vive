@@ -89,16 +89,17 @@ class RobotArm {
 };
 
 class Robot {
-    public: 
-        RobotArm right;
-        RobotArm left;
+    public:
+        // RobotArm right;
+        // RobotArm left;
+        std::vector<RobotArm> robotArms;
         moveit::planning_interface::MoveGroupInterface *move_group_p;
 
         void setPoseTargets();
         void setPathConstraints();
         void setJointConstraints();
 
-        Robot();
+        Robot(int nr_arms);
 
 };
 
