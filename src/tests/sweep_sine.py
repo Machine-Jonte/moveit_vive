@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# publisher node
 """
 A simple script that sends fake controller position and orientation.
 This is used to investigate system properties.
