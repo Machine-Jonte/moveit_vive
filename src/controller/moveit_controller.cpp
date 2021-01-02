@@ -21,12 +21,10 @@
 #include <moveit_msgs/Constraints.h>
 #include <moveit_msgs/PositionConstraint.h>
 
+#include <assert.h>     /* assert */
 
 // Custom built
 #include "robotarm.h" // This is to control data in and out
-#include "user_interpreter.h" // Restrict overflow of commands (in the end not used)
-
-
 
 int main(int argc, char *argv[])
 {
@@ -44,22 +42,30 @@ int main(int argc, char *argv[])
     // Read param data
     std::string rightControllerName;
     std::string leftControllerName;
-    std::string dualArmPlanningGroup;
-    std::string rightArmPlanningGroup;
-    std::string leftArmPlanningGroup;
+    std::string robotPlanningGroup;
     std::string rightEndLinkName;
     std::string leftEndLinkName;
+    int numberOfArms;
+
+    std::vector<std::string> controllerName;
+    std::vector<std::string> endLinkName; 
 
     node_handle.param<std::string>("right_controller_name", rightControllerName, "right");
     node_handle.param<std::string>("left_controller_name", leftControllerName, "left");
-    node_handle.param<std::string>("dual_planning_group", dualArmPlanningGroup, "dual");
+    node_handle.param<std::string>("robot_planning_group", robotPlanningGroup, "dual");
     node_handle.param<std::string>("right_end_link_name", rightEndLinkName, "panda_1_link8");
     node_handle.param<std::string>("left_end_link_name", leftEndLinkName, "panda_2_link8");
+    node_handle.param<int>("number_of_arms", numberOfArms, 2);
+    std::cout << "[MOVEIT_VIVE]: NUMBER OF ARMS: " << numberOfArms << std::endl;
     
-
+    assert(numberOfArms > 0);
+    controllerName.push_back(rightControllerName);
+    controllerName.push_back(leftControllerName);
+    endLinkName.push_back(rightEndLinkName);
+    endLinkName.push_back(leftEndLinkName);
 
     // Setup MoveIt
-    moveit::planning_interface::MoveGroupInterface move_group(dualArmPlanningGroup);
+    moveit::planning_interface::MoveGroupInterface move_group(robotPlanningGroup);
 
     
     // Addition initialization
@@ -69,38 +75,27 @@ int main(int argc, char *argv[])
     // move_group.setGoalPositionTolerance(0.01);
 
     // Set up the robot arms (publishers and subscribers)    
-    Robot robot;
-    robot.right.init(node_handle, rightEndLinkName, rightControllerName);
-    robot.left.init(node_handle, leftEndLinkName, leftControllerName);
+    Robot robot(numberOfArms);
+    for(int i = 0; i < numberOfArms; i++){
+        robot.robotArms[i].init(node_handle, endLinkName[i], controllerName[i]);
+    }
+
     robot.move_group_p = &move_group;
 
-
-
-    // User Interpreter (to know when to send commands to move or not)
     double publish_frequency = 10;
-    UserInterpreter userInterpreter;
-    userInterpreter.lookbackTime = 0.2;
-    userInterpreter.init(&robot); 
-    userInterpreter.publish_frequency = publish_frequency;
 
     //Start running loop
     ros::Rate loop_rate(publish_frequency);
     while (ros::ok()) {
-        // userInterpreter.PushBackData();
-        // if(userInterpreter.Analyze())
-        // {
-            // robot.setPathConstraints();
-            // robot.setJointConstraints();
-            if(robot.left.controllerState.trigger > 0.99 || robot.right.controllerState.trigger > 0.99)
+        if(std::any_of(robot.robotArms.begin(), robot.robotArms.end(), [](RobotArm arm){return arm.controllerState.trigger > 0.99;}))
+        {
+            if(std::any_of(robot.robotArms.begin(), robot.robotArms.end(), [](RobotArm arm) {return !arm.controllerState.grip;}))
             {
-                if(!robot.left.controllerState.grip && !robot.right.controllerState.grip)
-                {
-                    robot.setPoseTargets();
-                    robot.move_group_p->move();
-                    // robot.move_group_p->clearPathConstraints();
-                }
+                std::cout << "[MOVEIT_VIVE]: TRYING TO MOVE" << std::endl;
+                robot.setPoseTargets();
+                robot.move_group_p->move();
             }
-        // }
+        }
         ros::spinOnce();
         loop_rate.sleep();
     }

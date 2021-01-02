@@ -29,10 +29,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES moveit_vive
-#  CATKIN_DEPENDS geometry_msgs moveit_commander moveit_msgs rospy std_msgs
-#  DEPENDS system_lib
   CATKIN_DEPENDS
     moveit_core
     moveit_ros_planning_interface
@@ -52,46 +48,12 @@ include_directories(
 )
 
 
-add_executable(vive_moveit_jointConstraints src/LEGACY/vive_moveit_jointConstraints.cpp)
-target_link_libraries(vive_moveit_jointConstraints ${catkin_LIBRARIES})
-
-# add_dependencies(vive_moveit_jointConstraints moveit_vive)
-
-add_executable(panda_dual_control src/LEGACY/panda_dual_control.cpp)
-target_link_libraries(panda_dual_control ${catkin_LIBRARIES})
-# add_dependencies(panda_dual_control moveit_vive)
-
-add_executable(panda_dual_simultaneous_control src/LEGACY/panda_dual_simultaneous_control.cpp)
-target_link_libraries(panda_dual_simultaneous_control ${catkin_LIBRARIES})
-# add_dependencies(panda_dual_simultaneous_control moveit_vive)
-
-add_executable(panda_dual_simultaneous_control_trajectory
-  src/LEGACY/panda_dual_simultaneous_control_trajectory.cpp
-  src/LEGACY/moveit_workspace.cpp
-)
-
-target_link_libraries(
-  panda_dual_simultaneous_control_trajectory 
-  ${catkin_LIBRARIES} 
-)
-
 add_executable(moveit_controller
   src/controller/moveit_controller.cpp
   src/controller/robotarm.cpp
-  src/controller/user_interpreter.cpp
 )
 
 target_link_libraries(
   moveit_controller 
   ${catkin_LIBRARIES} 
 )
-
-# add_dependencies(panda_dual_simultaneous_control_trajectory moveit_vive)
-
-# target_link_libraries(
-#   ${catkin_LIBRARIES} ${EIGEN_LIBRARY}
-# )
-
-# add_executable(poseTalker_demo src/poseTalker_demo.cpp)
-# target_link_libraries(poseTalker_demo ${catkin_LIBRARIES})
-# add_dependencies(poseTalker_demo vive_interface)

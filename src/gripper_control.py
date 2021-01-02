@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# subscriber node
 """
 A simple script that translates desired gripper width to command for
 JointGroupPositionController.
